@@ -1,0 +1,4866 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass IEEEtran
+\begin_preamble
+\usepackage{epsfig} 
+\end_preamble
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 2
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Large-scale synthesis of functional spiking neural circuits 
+\end_layout
+
+\begin_layout Author
+Terrence C.
+ Stewart and Chris Eliasmith
+\end_layout
+
+\begin_layout Abstract
+In this paper we review the theoretical and software tools used to construct
+ Spaun, the first (and so far only) brain model capable of performing cognitive
+ tasks.
+ This tool set allowed us to configure 2.5 million simple nonlinear components
+ (neurons) with 60 billion connections between them (synapses) such that
+ the resulting model can perform eight different perceptual, motor, and
+ cognitive tasks.
+ To reverse engineer the brain in this way, a method is needed that shows
+ how large numbers of simple components, each of which receives thousands
+ of inputs from other components, can be organized to perform the desired
+ computations.
+ We achieve this through the Neural Engineering Framework (NEF), a mathematical
+ theory that provides methods for systematically generating biologically
+ plausible spiking networks to implement nonlinear and linear dynamical
+ systems.
+ On top of this, we propose the Semantic Pointer Architecture (SPA), a hypothesi
+s regarding some aspects of the organization, function, and representational
+ resources used in the mammalian brain.
+ We conclude by discussing Spaun, which is an example model that uses the
+ SPA and is implemented using the NEF.
+ Throughout, we discuss the software tool Nengo, which allows for the synthesis
+ and simulation of neural models efficiently on the scale of Spaun, and
+ provides support for constructing models using the NEF and the SPA.
+ The resulting NEF/SPA/Nengo combination is a general tool set for both
+ evaluating hypotheses about how the brain works, and for building systems
+ that compute particular functions using neuron-like components.
+\end_layout
+
+\begin_layout Section
+Introduction
+\end_layout
+
+\begin_layout Standard
+In this paper, we describe the methodology and tools we have developed for
+ building large-scale systems from simulated spiking neurons.
+ In particular, we describe two theoretical tools (the Neural Engineering
+ Framework and the Semantic Pointer Architecture) and one software suite
+ (Nengo) that we used to construct what is currently the world's first 
+\emph on
+functional
+\emph default
+ brain model (i.e.
+ one that is capable of performing a variety of cognitive tasks).
+ This model, which we refer to as the Semantic Pointer Architecture Unified
+ Network (or Spaun), consists of 2.5 million simulated spiking neurons whose
+ properties and interconnections are consistent with those found in the
+ human brain.
+ The model receives input in the form of digital images on a virtual retina
+ and produces output that controls a simulated arm.
+ With this framework, Spaun is able to perform eight different tasks, including
+ digit recognition, serial working memory, pattern completion, mental arithmetic
+, and question answering.
+ Furthermore, it is able to switch between these tasks based on its own
+ visual input, meaning that there are no external modifications made to
+ the network between tasks.
+ This sort of cognitive flexibility is a hallmark of cognitive systems,
+ but is difficult to achieve with traditional neural modeling approaches.
+ 
+\end_layout
+
+\begin_layout Standard
+The major goal of this research is to understand how the brain works by
+ reverse-engineering it.
+ We do this by trying to build biologically 
+\emph on
+plausible
+\emph default
+ models of cognitive processes.
+ For us, these are models where the individual components (simulated neurons)
+ can be made as similar to real neurons as desired, and where the large-scale
+ anatomy and connectivity of the brain is respected.
+ While the work described here uses the leaky integrate-and-fire (LIF) model
+ of a neuron (the simplest and most common neuron model that produces spikes),
+ all of the techniques apply to more detailed neural models.
+ Different neurons in different brain areas have different properties, and
+ we use this neurological data to constrain our models.
+ While we do not argue that this is the 
+\emph on
+only 
+\emph default
+way to build such models, we believe that the Neural Engineering Framework
+ (NEF) is a general tool for implementing a very large set of algorithms
+ in components like neurons, and that the Semantic Pointer Architecture
+ is one particular algorithm that can be implemented with the NEF and that
+ we believe is quite promising for matching human performance.
+\end_layout
+
+\begin_layout Standard
+As a side effect of this reverse engineering goal, the Neural Engineering
+ Framework provides a methodology for biomimetic computation.
+ That is, it shows how to connect large numbers of very simple components
+ (neurons) with potentially stochastic behaviours acting in parallel to
+ compute functions of the form 
+\begin_inset Formula $\mathbf{y}=f(\mathbf{x})$
+\end_inset
+
+ and 
+\begin_inset Formula $\frac{d\mathbf{x}}{dt}=f(\mathbf{x},\mathbf{u})$
+\end_inset
+
+ where 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+, 
+\begin_inset Formula $\mathbf{y}$
+\end_inset
+
+, and 
+\begin_inset Formula $\mathbf{u}$
+\end_inset
+
+ are vectors.
+ The individual components need not be exactly like neurons.
+ The only requirements are that the components sum their inputs and that
+ there is a low-pass filter on each connection.
+ This leads to the ability to perform useful computation with a very different
+ type of component than is seen in conventional computing.
+\end_layout
+
+\begin_layout Standard
+We begin in section 2 with the Neural Engineering Framework, the 
+\begin_inset Quotes eld
+\end_inset
+
+neural compiler
+\begin_inset Quotes erd
+\end_inset
+
+ that takes a vector-based description of a system (and its dynamics) and
+ converts it into a network of interacting components (in this case, spiking
+ neurons).
+ In section 3 we describe the Semantic Pointer Architecture, a method for
+ taking cognitive algorithms and converting them into vector-based descriptions
+ consistent with mammalian neurobiological constraints.
+ Sections 2 and 3 both end with descriptions of our open-source software
+ Nengo that implements these ideas.
+ Finally, in section 4 we show how these tools work can be used in concert
+ to produce Spaun.
+ Material throughout this paper is adapted from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013,Eliasmith2012b,rasmussen2013modeling"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Section
+\begin_inset CommandInset label
+LatexCommand label
+name "sec:The-Neural-Engineering"
+
+\end_inset
+
+The Neural Engineering Framework (NEF)
+\end_layout
+
+\begin_layout Standard
+The Neural Engineering Framework (NEF) is a general-purpose system for taking
+ algorithms and implementing them using components such as spiking neurons
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2003m"
+
+\end_inset
+
+.
+ This can be thought of as a 
+\begin_inset Quotes eld
+\end_inset
+
+neural compiler
+\begin_inset Quotes erd
+\end_inset
+
+ where algorithms written in a high-level language are converted into neurons
+ with connections between them.
+ This compilation process works for arbitrary neuron types, and can be constrain
+ed in biologically realistic ways.
+ Importantly, the high-level algorithms must be expressed in terms of vectors
+ and functions on those vectors (including ordinary differential equations).
+ The resulting neural networks approximate the desired functions, and the
+ error of this approximation can be made arbitrarily small by increasing
+ the number of neurons.
+ This makes the NEF ideal for expressing algorithms typically seen in domains
+ such as control theory, and determining their relevance to brain function.
+\end_layout
+
+\begin_layout Standard
+While the NEF can be used to build arbitrary abstract systems such as controlled
+ attractor networks 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2005p"
+
+\end_inset
+
+, we have primarily used it to show how particular capabilities found in
+ real animals might be implemented biologically.
+ This has included path integration in rodents 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Conklin2005b"
+
+\end_inset
+
+, working memory 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Singh2006b"
+
+\end_inset
+
+ and arm movements 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Dewolf"
+
+\end_inset
+
+ in monkeys, and decision-making in rats 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Laubach2010,Liu2011"
+
+\end_inset
+
+ and humans 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Litt2008u"
+
+\end_inset
+
+.
+ We have also taken into account biological constraints such as Dale's Principle
+ 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Parisien2008c"
+
+\end_inset
+
+ and incorporated biologically realistic learning rules to construct these
+ networks 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "MacNeil2011a,bekolay2013"
+
+\end_inset
+
+.
+ Several overviews of the NEF are available 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2003f,Eliasmith2005p,stewart2012b,Eliasmith2012b"
+
+\end_inset
+
+.
+ The rest of this section serves as a summary of the three main principles
+ within the NEF, plus our software tool Nengo.
+ 
+\end_layout
+
+\begin_layout Subsection
+Principle 1 - Representation
+\end_layout
+
+\begin_layout Standard
+The core of the NEF is the idea that groups of neurons represent vectors,
+ and connections between groups of neurons compute functions on those vectors.
+ The first NEF principle shows how the activity of a group of neurons can
+ be said to represent a vector, and how changes in the activity of those
+ neurons corresponds to changes in the represented vector.
+\end_layout
+
+\begin_layout Standard
+We start with the notion of a 
+\begin_inset Quotes eld
+\end_inset
+
+preferred direction vector
+\begin_inset Quotes erd
+\end_inset
+
+.
+ In the brain many neurons have a particular stimulus (or response) for
+ which they will fire most strongly.
+ As the stimulus (or response) changes to become less similar to the preferred
+ vector, the neuron will fire less quickly.
+ This was originally identified in the motor system 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Georgopoulos1989q"
+
+\end_inset
+
+ and has since been seen in the head direction system 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Taube2007"
+
+\end_inset
+
+, visual system 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Rust2006"
+
+\end_inset
+
+, and auditory system 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Fischer2009w"
+
+\end_inset
+
+.
+ For a more detailed exploration of this idea, see 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Stewart2011a"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+For the NEF, we generalize this concept to all neural populations.
+ In particular, we quantify it by stating that the total current going into
+ a neuron will be proportional to the dot product of the vector to be represente
+d, 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+, and the preferred direction vector for the neuron, 
+\begin_inset Formula $\mathbf{e}_{i}$
+\end_inset
+
+ (plus a constant bias term).
+ The response of a neuron 
+\series bold
+
+\begin_inset Formula $i$
+\end_inset
+
+
+\series default
+ for any given input vector 
+\series bold
+
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+
+\series default
+ is thus
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{equation}
+\delta_{i}(\mathbf{x})=G_{i}[\alpha_{i}\mathbf{e}_{i}\mathbf{x}+J_{i}^{bias}]\label{eq:enc}
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $\delta_{i}$
+\end_inset
+
+ is the spiking output of the neuron, 
+\begin_inset Formula $G_{i}$
+\end_inset
+
+ is the neuron model, 
+\begin_inset Formula $\alpha_{i}$
+\end_inset
+
+ is a randomly chosen gain term, 
+\begin_inset Formula $\mathbf{e}_{i}$
+\end_inset
+
+ is the preferred direction vector, and 
+\begin_inset Formula $J_{i}^{bias}$
+\end_inset
+
+ is a randomly chosen fixed background current.
+ We use 
+\begin_inset Formula $\mathbf{e}$
+\end_inset
+
+ for 
+\shape italic
+encoder
+\shape default
+ to indicate that (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:enc"
+
+\end_inset
+
+) captures a transformation between spaces: 
+\series bold
+
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+
+\series default
+ is encoded in the activity space of the neurons.
+ Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:encoding"
+
+\end_inset
+
+ shows this encoding for the case where 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+ is two-dimensional and the neural population consists of four neurons.
+ Importantly, the NEF applies to a large variety of neuron models (including
+ both spiking and non-spiking models) since it makes no commitment to a
+ specific function 
+\begin_inset Formula $G$
+\end_inset
+
+ (whose input is the total current flowing into the neuron).
+ The leaky-integrate-and-fire (LIF) model is a common choice, for reasons
+ of computational efficiency (and is used in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:encoding"
+
+\end_inset
+
+), but a wide variety of neural models work with the NEF.
+ 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename 2d Representation.eps
+	width 3.5in
+
+\end_inset
+
+
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:encoding"
+
+\end_inset
+
+NEF encoding of a two-dimensional signal using four neurons.
+ a) The input signal 
+\begin_inset Formula $x_{1}=\sin(6t)$
+\end_inset
+
+ (black), 
+\begin_inset Formula $x_{2}=\cos(6t)$
+\end_inset
+
+ (gray) over 1.2 seconds.
+ b) The spikes generated by the neurons when driven by the input in a).
+ c) The same input shown in the vector space.
+ The path of the input is a unit circle.
+ Older inputs are in progressively lighter gray.
+ The preferred direction vectors 
+\begin_inset Formula $\mathbf{e}_{i}$
+\end_inset
+
+ of all four neurons are also shown.
+ d) The firing rates of the four neurons for different inputs around the
+ unit circle (firing rates).
+ Gains 
+\begin_inset Formula $\alpha_{i}$
+\end_inset
+
+ and biases 
+\begin_inset Formula $J_{i}^{bias}$
+\end_inset
+
+ are randomly chosen.
+ (Figure reproduced from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+ with permission.)
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Given an encoding operation, it is natural to define a decoding operation,
+ in order to characterize the information processing characteristics of
+ the system (in this case an ensemble of neurons).
+ To decode a continuous estimate of the input from neural activity, the
+ NEF focuses on the postsynpatic filtered activity generated by the reception
+ of a spike at a synapse.
+ This activity is taken to be a linear filter applied to the spiking activity:
+\begin_inset Formula 
+\[
+a_{i}(\mathbf{x})=\sum_{j}h_{i}(t)*\delta_{i}(t-t_{j}(\mathbf{x}))
+\]
+
+\end_inset
+
+where 
+\begin_inset Formula $h_{i}(t)$
+\end_inset
+
+ is the synaptic response function (usually a decaying exponential) with
+ a time constant, 
+\begin_inset Formula $\tau_{PSC}$
+\end_inset
+
+, determined by neurotransmitter type at the synapse, '
+\begin_inset Formula $*$
+\end_inset
+
+' is the convolution operator, and 
+\begin_inset Formula $\delta_{i}(t-t_{j}(\mathbf{x}))$
+\end_inset
+
+ is the spike train produced by neuron 
+\begin_inset Formula $i$
+\end_inset
+
+ in response to input 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+, with spike times indexed by 
+\begin_inset Formula $j$
+\end_inset
+
+.
+ Having defined this continuous variable, which is equal to the spike rate
+ as 
+\begin_inset Formula $\tau_{PSC}\rightarrow\infty$
+\end_inset
+
+, we can specify a decoding operation for estimating the input 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+For reasons that will be apparent in a moment, we use a 
+\shape italic
+linear
+\shape default
+ decoder:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{equation}
+\hat{\mathbf{x}}=\sum_{i}^{N}a_{i}\mathbf{(x)}\mathbf{d}_{i}\label{eq:dec}
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $N$
+\end_inset
+
+ is the number of neurons in the group, 
+\begin_inset Formula $\mathbf{d}_{i}$
+\end_inset
+
+ are the linear decoders, and 
+\begin_inset Formula $\hat{\mathbf{x}}$
+\end_inset
+
+ is the estimate of the original 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+ value that produced the neural activity (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:enc"
+
+\end_inset
+
+).
+ 
+\end_layout
+
+\begin_layout Standard
+Any optimization method can be used to find these decoders.
+ The simplest is to use standard least-squares optimization:
+\begin_inset Formula 
+\begin{equation}
+\underset{\mathbf{d}_{i}}{arg\, min}\int[\mathbf{x}-\sum_{i}^{N}a_{i}(\mathbf{x)}\mathbf{d}_{i}]^{2}d\mathbf{x}\label{eq:error}
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $\mathbf{d}_{i}$
+\end_inset
+
+ are the decoding vectors over which this error is minimized and the integral
+ is over all 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+ values.
+ It has been shown that linear decoders are sufficient to decode ~95% of
+ the information available in a single spike train generated by a stimulus
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Rieke1997b"
+
+\end_inset
+
+.
+ Furthermore, as the number of neurons 
+\begin_inset Formula $N$
+\end_inset
+
+ increases, the mean squared error decreases as 
+\begin_inset Formula $1/N$
+\end_inset
+
+.
+ The NEF decoding process is depicted in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:NEF-decoding"
+
+\end_inset
+
+, where the optimal linear decoders have been found and used for twenty
+ neurons.
+ Temporal decoding is also linear, as described, and is performed using
+ the postsynaptic, current-based filters (see section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sub:Principle-3--"
+
+\end_inset
+
+ for further discussion).
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename 2D Representation Decoding.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:NEF-decoding"
+
+\end_inset
+
+NEF decoding of a two-dimensional signal using twenty neurons.
+ Inputs are the same as in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:encoding"
+
+\end_inset
+
+.
+ a) The original input and the decoded estimate over 1.2s (black is x1, gray
+ is x2).
+ b) The same data shown in the vector space.
+ Older states are lighter gray.
+ For both a and b, smooth lines represent the ideal 
+\series bold
+x 
+\series default
+values, while noisy lines represent the estimate 
+\begin_inset Formula $\hat{\mathbf{x}}$
+\end_inset
+
+.
+ c) The spikes generated by the twenty neurons during the simulation, used
+ to generate the decodings shown in a) and b).
+ (Figure reproduced from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+ with permission.)
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+While linear decoders are useful for visualizing the information encoded
+ within the activity of a group of neurons, they also provide a direct way
+ to solve for connection weights between groups of neurons.
+ This is a key advantage of the NEF: rather than using a learning rule to
+ optimize over the entire space of all connection weights, we instead solve
+ the simpler problem of optimizing over the space of linear decoders, and
+ then use that result to solve for the connection weights.
+ Importantly, given the characterization of neural activity with preferred
+ direction vectors, there is no difference between using this smaller space
+ and using the equivalent full connection matrix.
+ Interestingly, this general technique has started to be applied in broader
+ domains; see [Tapson & van Schaif reference] for an overview.
+\end_layout
+
+\begin_layout Standard
+For example, if a connection between neural groups is meant to compute the
+ identity function 
+\begin_inset Formula $\mathbf{y}=\mathbf{x}$
+\end_inset
+
+ (where 
+\begin_inset Formula $\mathbf{y}$
+\end_inset
+
+ is the vector space represented by the second population B and 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+ is the vector space represented by the first population A), the connections
+ between individual neurons are given by 
+\begin_inset Formula 
+\begin{equation}
+\omega_{ij}=\alpha_{j}\mathbf{d}_{i}\mathbf{e}_{j}\label{eq:weights}
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $i$
+\end_inset
+
+ indexes the neurons in group A and 
+\begin_inset Formula $j$
+\end_inset
+
+ indexes the neurons in B.
+ Behavior of this network is shown in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Using-NEF-weights"
+
+\end_inset
+
+a.
+ 
+\end_layout
+
+\begin_layout Standard
+While the least-squares method for optimization we use here is not biologically
+ plausible on its own, we have also shown that biologically realistic learning
+ rules will converge on a similar solution 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "MacNeil2011a"
+
+\end_inset
+
+.
+ These realistic rules are, however, several orders of magnitude more computatio
+nally expensive.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename 2D Communication Channel.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:Using-NEF-weights"
+
+\end_inset
+
+Connecting neurons using the NEF.
+ a) Computing the identity function between A and B.
+ b) Computing the element-wise square between A and B.
+ Simulations are 1.2s long, and all populations have 20 neurons with randomly
+ chosen encoders 
+\begin_inset Formula $\mathbf{e}_{i}$
+\end_inset
+
+, gains 
+\begin_inset Formula $\alpha_{i}$
+\end_inset
+
+ and biases 
+\begin_inset Formula $J_{i}^{bias}$
+\end_inset
+
+.
+ (Figure reproduced from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+ with permission.)
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Principle 2 - Transformation
+\end_layout
+
+\begin_layout Standard
+Connections between groups of neurons can also compute functions other than
+ the identity function.
+ That is instead of 
+\series bold
+
+\begin_inset Formula $\mathbf{y}=\mathbf{x}$
+\end_inset
+
+
+\series default
+ we can do 
+\series bold
+
+\begin_inset Formula $\mathbf{y}=f(\mathbf{x})$
+\end_inset
+
+
+\series default
+.
+ We do this by finding decoders 
+\series bold
+
+\begin_inset Formula $\mathbf{d}_{i}^{f}$
+\end_inset
+
+ 
+\series default
+for the particular function
+\series bold
+ 
+\begin_inset Formula $f(\mathbf{x})$
+\end_inset
+
+
+\series default
+ by substituting 
+\series bold
+
+\begin_inset Formula $f(\mathbf{x})$
+\end_inset
+
+ 
+\series default
+for 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+ in equation (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:error"
+
+\end_inset
+
+).
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{equation}
+\underset{\mathbf{d}_{i}^{f}}{arg\, min}\int[f(\mathbf{x})-\sum_{i}a_{i}(\mathbf{x)}\mathbf{d}_{i}^{f}]^{2}d\mathbf{x}.\label{eq:error-fcns}
+\end{equation}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The connection weights can then be computed using (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:weights"
+
+\end_inset
+
+).
+ For the special case of linear functions
+\series bold
+ 
+\begin_inset Formula $\mathbf{y}=\mathbf{L}\mathbf{x}$
+\end_inset
+
+
+\series default
+, rather than solving for a new decoder, we can simply put 
+\begin_inset Formula $\mathbf{L}$
+\end_inset
+
+ directly into the weight equation itself, resulting in 
+\begin_inset Formula $\omega_{ij}=\alpha_{j}\mathbf{d}_{i}\mathbf{L}\mathbf{e}_{j}$
+\end_inset
+
+.
+ Combining these two approaches, the neural connection weights needed to
+ approximate the function
+\series bold
+ 
+\begin_inset Formula $\mathbf{y=L}f(\mathbf{x\textrm{)}}$
+\end_inset
+
+
+\series default
+ are:
+\begin_inset Formula 
+\begin{equation}
+\omega_{ij}=\alpha_{j}\mathbf{d}_{i}^{f}\mathbf{L}\mathbf{e}_{j}\label{eq:weights-general}
+\end{equation}
+
+\end_inset
+
+Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Using-NEF-weights"
+
+\end_inset
+
+b shows the computation of the element-wise square (
+\begin_inset Formula $f(\mathbf{x})=[x_{1}^{2},x_{2}^{2}]$
+\end_inset
+
+).
+\end_layout
+
+\begin_layout Subsection
+\begin_inset CommandInset label
+LatexCommand label
+name "sub:Principle-3--"
+
+\end_inset
+
+Principle 3 - Dynamics
+\end_layout
+
+\begin_layout Standard
+While the first two principles are sufficient to build neural approximations
+ of any desired function of the vector 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+, the NEF also provides a method for computing functions of the form 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}f(\mathbf{x},\mathbf{u})$
+\end_inset
+
+
+\series default
+, where 
+\begin_inset Formula $\mathbf{u}$
+\end_inset
+
+ is the input from some other population.
+ We do this by exploiting the fact that neurons do not simply accept input
+ as spikes.
+ Rather, when a spike is transmitted from one neuron to another, the actual
+ current that flows into the second neuron is a low-pass-filtered version
+ of that spike.
+ In particular, the post-synaptic current is well-approximated by 
+\begin_inset Formula $h(t)=u(t)e^{-t/\tau}$
+\end_inset
+
+, where 
+\begin_inset Formula $u(t)$
+\end_inset
+
+ is the step function and 
+\begin_inset Formula $\tau$
+\end_inset
+
+ is the time constant of the neurotransmitter used.
+ This time constant varies throughout the brain, e.g., from 2-5 ms (AMPA;
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "jonas1993quantal"
+
+\end_inset
+
+) up to ~100ms (NMDA; 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "sah1990properties"
+
+\end_inset
+
+).
+ The effect of this filter is that instead of a connection computing the
+ function 
+\begin_inset Formula $\mathbf{y}(t)=f(\mathbf{x}(t))$
+\end_inset
+
+ it will compute 
+\begin_inset Formula $\mathbf{y}(t)=f(\mathbf{x}(t))*h(t)$
+\end_inset
+
+ (or, in the Laplace domain, 
+\begin_inset Formula $\mathbf{Y}(s)=\mathbf{F}(s)H(s)$
+\end_inset
+
+).
+\end_layout
+
+\begin_layout Standard
+It turns out that this implicit low-pass filter can be used to generate
+ neural models that compute abitrary dynamics.
+ Given a neural population representing 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+, an input 
+\begin_inset Formula $\mathbf{u}(t)$
+\end_inset
+
+, and a feedback connection from 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+ back to itself computing 
+\begin_inset Formula $g(\mathbf{x}(t))$
+\end_inset
+
+, we note that in the Laplace domain we get 
+\begin_inset Formula $\mathbf{X}(s)=(\mathbf{G}(s)+\mathbf{U}(s))H(s)$
+\end_inset
+
+.
+ Since the Laplace transform of 
+\begin_inset Formula $h(t)=u(t)e^{-t/\tau}$
+\end_inset
+
+ is 
+\begin_inset Formula $H(s)=1/(1+s\tau)$
+\end_inset
+
+, we can rearrange this to get 
+\begin_inset Formula $s\mathbf{X}(s)=(\mathbf{G}(s)-\mathbf{X}(s))/\tau+\mathbf{U}(s)/\tau$
+\end_inset
+
+.
+ Converting back to the time domain, 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}\frac{g(\mathbf{x}(t))-\mathbf{x}(t)}{\tau}+\frac{\mathbf{u}(t)}{\tau}$
+\end_inset
+
+
+\series default
+.
+ Thus, if we desire the dynamics 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}f(\mathbf{x}(t))+\mathbf{u}(t)$
+\end_inset
+
+
+\series default
+, we introduce a feedback connection that uses the previous two NEF principles
+ to find connection weights that compute 
+\begin_inset Formula $g(\mathbf{x}(t))=\tau f(\mathbf{x})+\mathbf{x}$
+\end_inset
+
+ and we scale the input 
+\begin_inset Formula $\mathbf{u}(t)$
+\end_inset
+
+ by 
+\begin_inset Formula $\tau$
+\end_inset
+
+.
+ For arbitrary dynamics of the form 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}f(\mathbf{x},\mathbf{u})$
+\end_inset
+
+
+\series default
+, we do a change of variables 
+\begin_inset Formula $\mathbf{x}^{\prime}=\langle\mathbf{x},\mathbf{u}\rangle$
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename Lorenz attractor and oscillator.eps
+	width 3.5in
+
+\end_inset
+
+
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:Two-dynamical-systems"
+
+\end_inset
+
+Two dynamical systems implemented with the NEF.
+ a) A simple linear harmonic oscillator using 200 neurons.
+ b) A nonlinear dynamical system, specifically a chaotic Lorenz attractor,
+ using 2000 neurons.
+ Both are recurrently coupled populations of neurons, and the NEF is used
+ to compute the coupling connections to implement the two different dynamical
+ systems.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+This exploitation of the inherent first-order low-pass filter found in synaptic
+ connections allows for the implementation of a very wide variety of systems,
+ including oscillators, integrators, and arbitrary attractor networks 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2005p"
+
+\end_inset
+
+.
+ Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Two-dynamical-systems"
+
+\end_inset
+
+a shows a single neural population with a recurrent feedback connection
+ computing the standard linear oscillator 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}[-x_{2},-x_{1}]$
+\end_inset
+
+
+\series default
+.
+ Here, the post-synapic time constant 
+\begin_inset Formula $\tau$
+\end_inset
+
+ is 100ms, but the period of oscillation is 
+\begin_inset Formula $2\pi$
+\end_inset
+
+ (~6.28 seconds).
+ Importantly, we achieve different periods of oscillation without changing
+ the neural property 
+\begin_inset Formula $\tau$
+\end_inset
+
+; rather, we change the function being computed by the feedback connection,
+ resulting in a different set of connection weights.
+ For example, we could compute 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}[-x_{2}/2,-x_{1}/2]$
+\end_inset
+
+
+\series default
+, giving a period of 
+\begin_inset Formula $\pi$
+\end_inset
+
+, instead.
+ This same method works for nonlinear functions as well; in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Two-dynamical-systems"
+
+\end_inset
+
+b we show the classic Lorenz attractor 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}[10(x_{2}-x_{1}),x_{1}(28-x_{3})-x_{2},x_{1}x_{2}-\frac{8}{3}x_{3}]$
+\end_inset
+
+
+\series default
+.
+ This approach allows for the construction of neural models that correspond
+ to a very large family of functions, including those typically employed
+ by modern control theory and dynamic systems theory.
+\end_layout
+
+\begin_layout Standard
+It should be noted that networks constructed with this approach are fundamentall
+y different from Echo State Networks 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "jaeger2001"
+
+\end_inset
+
+ and Liquid State Machines 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Maass2002"
+
+\end_inset
+
+.
+ In both of those approaches, the recurrent connections are randomly chosen,
+ and then a linear combination of the outputs are found that compute the
+ desired function.
+ With the NEF, we also find a linear combination of the outputs (
+\begin_inset Formula $\mathbf{d}_{i}$
+\end_inset
+
+), but we solve for the ideal recurrent connection weights to achieve the
+ desired dynamics.
+ This makes the NEF much more efficient and capable of computing a much
+ wider range of dynamics.
+\end_layout
+
+\begin_layout Subsection
+Neural Engineering Objects (Nengo)
+\end_layout
+
+\begin_layout Standard
+These three principles are sufficient to implement all of our neural models.
+ However, to simplify the process of constructing these models, we have
+ developed an open-source software package known as Nengo (Neural ENGineering
+ Objects) that creates and runs these models.
+ Models can be built in Nengo using a drag-and-drop graphical user interface
+ or specified using the Python scripting language.
+ Full details and documentation can be found online at http://nengo.ca, and
+ in other publications 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2009l"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+For example, to create the model shown in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Using-NEF-weights"
+
+\end_inset
+
+a, we use the following script:
+\end_layout
+
+\begin_layout LyX-Code
+net = nef.Network('Identity Function')
+\end_layout
+
+\begin_layout LyX-Code
+net.make('A', neurons=20, dimensions=1) 
+\end_layout
+
+\begin_layout LyX-Code
+net.make('B', neurons=20, dimensions=1)
+\end_layout
+
+\begin_layout LyX-Code
+net.connect('A', 'B') 
+\end_layout
+
+\begin_layout Standard
+For Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Using-NEF-weights"
+
+\end_inset
+
+b we need to compute the element-wise square.
+ This is specified in a Python function as follows:
+\end_layout
+
+\begin_layout LyX-Code
+net = nef.Network('Element-wise Square')
+\end_layout
+
+\begin_layout LyX-Code
+net.make('A', neurons=20, dimensions=1) 
+\end_layout
+
+\begin_layout LyX-Code
+net.make('B', neurons=20, dimensions=1)
+\end_layout
+
+\begin_layout LyX-Code
+def square(x):
+\end_layout
+
+\begin_layout LyX-Code
+    return x[0]*x[0], x[1]*x[1]
+\end_layout
+
+\begin_layout LyX-Code
+net.connect('A', 'B', func=square) 
+\end_layout
+
+\begin_layout Standard
+Nengo will automatically solve for the connection weights that will best
+ approximate the provided function.
+\end_layout
+
+\begin_layout Standard
+Nengo also provides an interactive interface for displaying the results
+ of a simulation while it is running, allowing for real-time interaction
+ with a running model.
+ This interface allows the generated plots to be exported, and was used
+ to produce the previous figures in this paper (i.e.
+ all figures in section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sec:The-Neural-Engineering"
+
+\end_inset
+
+).
+ Furthermore, Nengo scales up to our largest models: the 2.5 million neuron
+ Spaun model is run in Nengo, and can be downloaded at http://models.nengo.ca/spau
+n.
+\end_layout
+
+\begin_layout Section
+The Semantic Pointer Architecture (SPA)
+\end_layout
+
+\begin_layout Standard
+While the Neural Engineering Framework specifies how to convert vector-based
+ algorithms into spiking neural networks, a separate theory is needed to
+ describe cognitive function in terms of vector-based algorithms.
+ Our approach to this problem is called the Semantic Pointer Architecture
+ (SPA).
+ While a full description can be found elsewhere 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+, the core of our approach is to suggest a vector-based cognitive architecture:
+ i.e., a set of basic functional components, each of which can be defined
+ in terms of vector operations, and an organization of those components
+ that can work together to implement cognitive algorithms.
+ In addition to these components, we provide a hypothesis as to how structured
+ representations (like sentences) can be represented using vectors and what
+ basic operations need to be performed on those vectors to achieve memory,
+ planning, pattern matching, and other behaviors.
+ We refer to our proposed form of neurally plausible representation as 
+\begin_inset Quotes eld
+\end_inset
+
+semantic pointers.
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+\begin_inset CommandInset label
+LatexCommand label
+name "sub:Structure"
+
+\end_inset
+
+Structure
+\end_layout
+
+\begin_layout Standard
+A central concern for modeling cognitive processing using neurons (or vectors)
+ is how to effectively represent structured information.
+ Structure is vital to explanations of cognitive behavior 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Anderson2007"
+
+\end_inset
+
+.
+ As an example, consider the sentence 
+\begin_inset Quotes eld
+\end_inset
+
+cats chase mice.
+\begin_inset Quotes erd
+\end_inset
+
+ If this is to be represented as a vector, then we need to represent it
+ in such as way that 
+\begin_inset Quotes eld
+\end_inset
+
+cats chase mice
+\begin_inset Quotes erd
+\end_inset
+
+ is different from 
+\begin_inset Quotes eld
+\end_inset
+
+mice chase cats.
+\begin_inset Quotes erd
+\end_inset
+
+ In an artificial language, like those typically used in computers, such
+ a phrase may be represented with a structured representation like 
+\family typewriter
+chase(cats, mice)
+\family default
+.
+ The majority of theories that attempt to explain human cognition rely on
+ the ability to store and manipulate these representations.
+ However, the problem of how neurons could possibly perform such manipulations
+ has been a long-standing problem in cognitive science 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Fodor1988"
+
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+The approach we present here is speculative, but is the only approach we
+ know of that is both flexible enough for us to develop large-scale cognitive
+ models and implementable within known biological constraints 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2009d,Eliasmith2013"
+
+\end_inset
+
+.
+ This approach is based on two different compression operators 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Plate1994,Stewart2011a"
+
+\end_inset
+
+.
+ The first of these is simple vector addition.
+ This takes in two vectors and produces a single new vector as output.
+ If each of the terms to be combined together are themselves vectors, then
+ we could write the full sentence as follows, where terms in bold are particular
+ vectors for each concept:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\mathbf{cats+chase+mice}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+However, this cannot serve to represent structure, since with this approach
+ 
+\begin_inset Quotes eld
+\end_inset
+
+cats chase mice
+\begin_inset Quotes erd
+\end_inset
+
+ would be exactly equal to 
+\begin_inset Quotes eld
+\end_inset
+
+mice chase cats.
+\begin_inset Quotes erd
+\end_inset
+
+ As a result we need a second 
+\begin_inset Quotes eld
+\end_inset
+
+binding
+\begin_inset Quotes erd
+\end_inset
+
+ operator: an operator that takes two vectors as input and produces a third
+ that is very dissimilar to the original inputs (as opposed to vector addition,
+ which produces an output that is highly similar to the inputs).
+ Denoting this operation as 
+\begin_inset Formula $\mathbf{\circledast}$
+\end_inset
+
+, and introducing new vectors for the 
+\shape italic
+roles
+\shape default
+ that terms in the sentence take on, we can represent the sentence 
+\begin_inset Formula $\mathbf{S}$
+\end_inset
+
+ as
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\mathbf{S}=\mathbf{agent}\circledast\mathbf{cats}+\mathbf{verb}\circledast\mathbf{chase}+\mathbf{object}\circledast\mathbf{mice}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Importantly, we also need to reverse (i.e.
+ decompress) these operations.
+ Given a sentence, we need to be able to identify what the verb is, for
+ example.
+ For this, we need an inverse operation such that 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\mathbf{S}\circledast\mathbf{verb}'\approx\mathbf{chase}
+\]
+
+\end_inset
+
+ where 
+\begin_inset Formula $\mathbf{verb}'$
+\end_inset
+
+ is an inverse of 
+\series bold
+
+\begin_inset Formula $\mathbf{verb}$
+\end_inset
+
+
+\series default
+ (i.e.
+ something that, when bound with 
+\series bold
+
+\begin_inset Formula $\mathbf{S},$
+\end_inset
+
+
+\series default
+ will produce 
+\series bold
+
+\begin_inset Formula $\mathbf{chase}$
+\end_inset
+
+
+\series default
+).
+\end_layout
+
+\begin_layout Standard
+There are a number of different vector operations that can fulfill the role
+ of the binding and inverse operators, and this family of approaches are
+ known as Vector Symbolic Architectures (VSAs) 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Gayler2003l"
+
+\end_inset
+
+.
+ One that is natural to implement in neurons via the NEF is circular convolution
+, which was originally explored by Plate in his Holographic Reduced Representati
+ons 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Plate1991g"
+
+\end_inset
+
+.
+ To efficiently implement this operation in neurons, we note that a) circular
+ convolution is element-wise multiplication in the Fourier transform space,
+ and b) the Fourier transform of a vector is a linear operation (multiplication
+ by 
+\begin_inset Formula $\mathbf{F}$
+\end_inset
+
+, the discrete Fourier transform matrix).
+ Thus the binding of any two vectors, 
+\begin_inset Formula $\mathbf{A}$
+\end_inset
+
+ and 
+\begin_inset Formula $\mathbf{B}$
+\end_inset
+
+, can be computed by 
+\begin_inset Formula 
+\[
+\mathbf{C}=\mathbf{A}\circledast\mathbf{B}=\mathbf{F}^{-1}(\mathbf{FA}\odot\mathbf{FB})
+\]
+
+\end_inset
+
+where 
+\begin_inset Formula $\mathbf{\odot}$
+\end_inset
+
+ is used to indicate element-wise multiplication of the two vectors (i.e.,
+ 
+\begin_inset Formula $\mathbf{x}\odot\mathbf{y}=(x_{1}y_{1},\ldots,x_{n}y_{n}$
+\end_inset
+
+)).
+ Given the NEF, this is easily computed using a standard, two-layer feedforward
+ network (see figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Network-architecture-binding"
+
+\end_inset
+
+), with the imaginary components of the 
+\begin_inset Formula $\mathbf{F}$
+\end_inset
+
+ matrix treated just as separate elements in the vector.
+ 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename convolution-network.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:Network-architecture-binding"
+
+\end_inset
+
+A network computing the binding operation (circular convolution) on two
+ eight-dimensional vectors.
+ There are four groups of neurons: A, B, Bind, and C.
+ A, B, and C have 150 neurons and Bind has 760 neurons.
+ The decoded vectors from A, B, and C are shown, and can be seen to be roughly
+ constant.
+ The spiking activity over 200ms of 38 randomly chosen neurons in the output
+ population are shown.
+ The Bind neurons encode 
+\begin_inset Formula $\mathbf{FA}$
+\end_inset
+
+ and 
+\begin_inset Formula $\mathbf{FB}$
+\end_inset
+
+, where 
+\begin_inset Formula $\mathbf{F}$
+\end_inset
+
+ is the discrete fourier transfom matrix.
+ The connections from Bind to C compute 
+\begin_inset Formula $\mathbf{F}^{-1}(\mathbf{FA}\odot\mathbf{FB})$
+\end_inset
+
+, which is the circular convolution of 
+\begin_inset Formula $\mathbf{A}$
+\end_inset
+
+ and 
+\begin_inset Formula $\mathbf{B}$
+\end_inset
+
+ (from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+ with permission).
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+To unbind vectors (i.e., to extract information out of a sentence), we follow
+ Plate 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Plate1991g"
+
+\end_inset
+
+ in noting that circular convolution has an approximate inverse: circular
+ correlation.
+ Furthermore, circular correlation is same as circular convolution, except
+ that the second vector has its elements permuted.
+ In other words, 
+\begin_inset Formula $\mathbf{A}\approx(\mathbf{A}\circledast\mathbf{B})\circledast\mathbf{B}'$
+\end_inset
+
+ where 
+\begin_inset Formula $\mathbf{B}'_{i}=\mathbf{B}_{(N-i)\mod N}$
+\end_inset
+
+ and 
+\begin_inset Formula $i$
+\end_inset
+
+ indexes the 
+\begin_inset Formula $N$
+\end_inset
+
+ elements of 
+\begin_inset Formula $\mathbf{B}$
+\end_inset
+
+.
+ Since the permutation is a linear operation (denoted here as 
+\begin_inset Formula $\mathbf{S}$
+\end_inset
+
+), a very similar network to that shown in figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Network-architecture-binding"
+
+\end_inset
+
+ can be used to compute the following
+\begin_inset Formula 
+\[
+\mathbf{A}\approx\mathbf{C}\circledast\mathbf{B}'=\mathbf{F}^{-1}(\mathbf{FC}\odot\mathbf{FSB})
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+This method for representing structured information allows us to perform
+ symbol-like manipulations: building larger structures out of basic vectors
+ and extracting (approximations of) those vectors.
+ However, the fact that these representations are vectors rather than symbols
+ adds new functionality beyond that of standard symbol systems.
+ In particular, we have shown that these representations can be used to
+ perform pattern matching 
+\shape italic
+across
+\shape default
+ structured information.
+ For example, given the sequence 
+\begin_inset Quotes eld
+\end_inset
+
+3
+\begin_inset Quotes erd
+\end_inset
+
+, 
+\begin_inset Quotes eld
+\end_inset
+
+33
+\begin_inset Quotes erd
+\end_inset
+
+, 
+\begin_inset Quotes eld
+\end_inset
+
+333
+\begin_inset Quotes erd
+\end_inset
+
+, a person can quickly conclude that the next item is 
+\begin_inset Quotes eld
+\end_inset
+
+3333
+\begin_inset Quotes erd
+\end_inset
+
+.
+ This type of pattern completion has proven difficult to do computationally
+ without simply giving a computer a set of pre-determined patterns to look
+ for.
+ However, semantic pointers allow the system to induce the pattern.
+ To solve this problem with semantic pointers, each item is converted into
+ a structured representation as above (so 
+\begin_inset Quotes eld
+\end_inset
+
+3
+\begin_inset Quotes erd
+\end_inset
+
+ becomes 
+\begin_inset Formula $\mathbf{three\circledast item1}$
+\end_inset
+
+ and 
+\begin_inset Quotes eld
+\end_inset
+
+33
+\begin_inset Quotes erd
+\end_inset
+
+ becomes 
+\begin_inset Formula $\mathbf{three\circledast item1+three\circledast item2}$
+\end_inset
+
+ and so on), then the transformation between each vector pair is estimated,
+ and finally the estimates are averaged together.
+ The averaging gives an estimate of a generic 
+\begin_inset Quotes eld
+\end_inset
+
+next
+\begin_inset Quotes erd
+\end_inset
+
+ transformation that can be applied to the last item to give the next predicted
+ item in the sequence.
+ For example, if the three items in the pattern are 
+\begin_inset Formula $\mathbf{P_{1}},$
+\end_inset
+
+ 
+\begin_inset Formula $\mathbf{P_{2}},$
+\end_inset
+
+ and 
+\begin_inset Formula $\mathbf{P_{3}},$
+\end_inset
+
+ the following is computed:
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $\mathbf{T_{1}}=\mathbf{P_{2}}\circledast\mathbf{P_{1}}'$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $\mathbf{T_{2}}=\mathbf{P_{3}}\circledast\mathbf{P_{2}}'$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $\mathbf{T}=\frac{1}{2}(\mathbf{T_{1}}+\mathbf{T_{2}})$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $\mathbf{P_{4}}=\mathbf{P_{3}}\circledast\mathbf{T}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+We have shown that this basic method for producing 
+\begin_inset Formula $\mathbf{P_{4}},$
+\end_inset
+
+ a prediction of the next item in the list, can be used to account for human
+ performance on Raven's Progressive Matrices 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Rasmussena,Rasmussen201"
+
+\end_inset
+
+, the leading measure of general intelligence.
+ In the case of the sequence 
+\begin_inset Quotes eld
+\end_inset
+
+3
+\begin_inset Quotes erd
+\end_inset
+
+, 
+\begin_inset Quotes eld
+\end_inset
+
+33
+\begin_inset Quotes erd
+\end_inset
+
+, 
+\begin_inset Quotes eld
+\end_inset
+
+333
+\begin_inset Quotes erd
+\end_inset
+
+, the result is approximately 
+\begin_inset Formula $\mathbf{three\circledast item1+three\circledast item2}$
+\end_inset
+
+
+\begin_inset Formula $+\mathbf{three\circledast item3+three\circledast item4}$
+\end_inset
+
+, or 
+\begin_inset Quotes eld
+\end_inset
+
+3333
+\begin_inset Quotes erd
+\end_inset
+
+.
+ The necessary steps are natural to implement in neurons using the NEF,
+ and the result is not only the first neural explanation of this cognitive
+ behavior, but also the first explanation in any form which does not 
+\begin_inset Quotes eld
+\end_inset
+
+build in
+\begin_inset Quotes erd
+\end_inset
+
+ a large set of different pattern types.
+ The key advantage here is that semantic pointers can not only contain structure
+d information, but can also be manipulated using vector operations (e.g.
+ averaging), to provide statistically and syntactically meaningful results.
+\end_layout
+
+\begin_layout Subsection
+Cognitive Control: Action Selection and Execution
+\end_layout
+
+\begin_layout Standard
+The above approach to structured representation can be used for many purposes.
+ For example, to remember the list 
+\begin_inset Quotes eld
+\end_inset
+
+seven, six, four
+\begin_inset Quotes erd
+\end_inset
+
+ we can represent the vector 
+\begin_inset Formula $\mathbf{M}=\mathbf{seven\circledast item1+six\circledast item2+four\circledast item3}$
+\end_inset
+
+.
+ To actually store such a representation in a 
+\begin_inset Quotes eld
+\end_inset
+
+working memory
+\begin_inset Quotes erd
+\end_inset
+
+ we can build a network whose dynamics are essentially 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}\mathbf{u}$
+\end_inset
+
+
+\series default
+ (i.e., an integrator).
+ This will hold its value over time given no input (
+\series bold
+
+\begin_inset Formula $\mathbf{u}=0$
+\end_inset
+
+
+\series default
+).
+ However, in order to make use of such a component within a larger cognitive
+ system, we need a method for controlling the inputs and outputs to this
+ component.
+ However, we cannot do this by having connections between components appear
+ and disappear at different times during the simulation: real biological
+ synaptic connections do not change so quickly.
+ Rather, we need a biologically plausible method for selectively routing
+ the output of one component to the input of another component, depending
+ on task demands.
+ We call these routings 
+\begin_inset Quotes eld
+\end_inset
+
+actions
+\begin_inset Quotes erd
+\end_inset
+
+, but note that they can be both physical actions and cognitive actions
+ (moving vectors from one area of the brain to another).
+\end_layout
+
+\begin_layout Standard
+This control problem can be broken down into two parts: action selection
+ (determining which routing is appropriate right now) and action execution
+ (implementing the routing).
+ For action selection, we take the standard approach of computing the 
+\begin_inset Quotes eld
+\end_inset
+
+utility
+\begin_inset Quotes erd
+\end_inset
+
+ of each action (how good it would be to perform this action in the current
+ context) and then choosing the action with the highest utility.
+ If different brain areas contain the current cognitive states 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+, 
+\begin_inset Formula $\mathbf{y}$
+\end_inset
+
+, and 
+\begin_inset Formula $\mathbf{z}$
+\end_inset
+
+ then we can use the NEF to compute the utility of an action 
+\begin_inset Formula $i$
+\end_inset
+
+ of the form 
+\begin_inset Formula $U_{i}=f(\mathbf{x})+g(\mathbf{y})+h(\mathbf{z})$
+\end_inset
+
+.
+ This can be done using equation 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:weights-general"
+
+\end_inset
+
+ and connection weights coming from the neural populations encoding 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+, 
+\begin_inset Formula $\mathbf{y}$
+\end_inset
+
+, and 
+\begin_inset Formula $\mathbf{z}$
+\end_inset
+
+.
+ Note that if we want the more general 
+\begin_inset Formula $U_{i}=f(\mathbf{x},\mathbf{y},\mathbf{z})$
+\end_inset
+
+ we can achieve this by forming a new neural group representing 
+\begin_inset Formula $\mathbf{q}=\langle\mathbf{x},\mathbf{y},\mathbf{z}\rangle$
+\end_inset
+
+ and making connections from the original areas to the new area.
+ However, for the models discussed here we find that most of the time the
+ functions needed to compute utility are extremely simple linear function
+ such as 
+\begin_inset Formula $U_{i}=\mathbf{L}\cdot\mathbf{x}$
+\end_inset
+
+ where 
+\series bold
+
+\begin_inset Formula $\mathbf{L}$
+\end_inset
+
+
+\series default
+ is a vector and 
+\series bold
+
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+
+\series default
+ is the state stored in a particular brain area.
+ 
+\end_layout
+
+\begin_layout Standard
+Determining which utility value is the largest is, however, more complicated.
+ The most obvious approach is to take the vector of all utilities for each
+ action 
+\series bold
+
+\begin_inset Formula $\mathbf{U}$
+\end_inset
+
+
+\series default
+ and compute the function 
+\series bold
+
+\begin_inset Formula $max(\mathbf{U})$
+\end_inset
+
+
+\series default
+.
+ Unfortunately, this function turns out to be difficult for neurons to approxima
+te, requiring more neurons than exist in the human brain for a vector of
+ only 100 actions.
+ Another approach is to build a Winner-Take-All system by implementing the
+ dynamical system 
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}U_{i}}{\mathrm{dt}}=}\mathbf{U}_{i}-\sum_{i\neq j}\mathbf{U}_{j}$
+\end_inset
+
+
+\series default
+.
+ This approach, however, requires a fair bit of time, as the system must
+ wait for the value 
+\series bold
+
+\begin_inset Formula $\mathbf{U}$
+\end_inset
+
+
+\series default
+ to settle to a stable equillibrium.
+ 
+\end_layout
+
+\begin_layout Standard
+For our models, we have chosen an alternate approach based on the basal
+ ganglia, a highly interconnected cluster of brain areas found underneath
+ the neocortex and near the thalamus.
+ This brain area has been consistently implicated in the ability to choose
+ between alternative courses of action.
+ Damage to the basal ganglia occurs in several diseases of motor control,
+ including Parkinson's and Huntington's diseases, and results in significant
+ cognitive defects 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Frank2006"
+
+\end_inset
+
+.
+ Neuroscientists 
+\begin_inset CommandInset citation
+LatexCommand citep
+before "e.g., "
+key "Redgrave1999"
+
+\end_inset
+
+ and cognitive scientists 
+\begin_inset CommandInset citation
+LatexCommand citep
+before "e.g., "
+key "Anderson2004j"
+
+\end_inset
+
+ consider the basal ganglia as being responsible for action selection in
+ both motor and cognitive domains 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Lieberman2006,Lieberman2007"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+The anatomical and physiological structure of the basal ganglia suggests
+ that it computes a particular dynamical system which effectively approximates
+ the maximum function 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Gurney2001"
+
+\end_inset
+
+.
+ The input is exactly the vector 
+\series bold
+
+\begin_inset Formula $\mathbf{U}$
+\end_inset
+
+
+\series default
+ described above, the list of utilities for each action.
+ The output is a vector of the same length, but which is zero for largest
+ element in 
+\series bold
+
+\begin_inset Formula $\mathbf{U}$
+\end_inset
+
+
+\series default
+ and positive for the other elements.
+ By implementing this dynamical system using the NEF, we achieve a biologically
+ realistic spiking implementation of action selection that gives a close
+ approximation to a maximum operation with a reasonable number of neurons
+ and which responds quickly to changing inputs.
+ For further details, see 
+\begin_inset CommandInset citation
+LatexCommand citet
+key "Stewart2010a"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+To execute the actions chosen by this mechanism, we turn to the well-known
+ cortex/basal ganglia/thalamus loop through the brain (see figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:cortex_bg_thalamus"
+
+\end_inset
+
+).
+ Roughly speaking, the SPA assumes that cortex provides, stores, and manipulates
+ representations, the basal ganglia determine which action to take based
+ on those representations, and the thalamus implements the desired routing
+ action between areas of the cortex.
+ To perform this routing, we need to organize neurons such that there is
+ a connection from one cortical area to another such that this connection
+ will compute 
+\begin_inset Formula $\mathbf{y=x}$
+\end_inset
+
+ if the action is selected, and 
+\begin_inset Formula $\mathbf{y=0}$
+\end_inset
+
+ if it is not selected.
+ This can be done in two ways; first, we could use the NEF to approximate
+ that nonlinear function.
+ However, for this particular special case there is a simpler approach.
+ We start by forming an intermediate group of neurons 
+\begin_inset Formula $\mathbf{z}$
+\end_inset
+
+ and forming connections from 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+ and to 
+\begin_inset Formula $\mathbf{y}$
+\end_inset
+
+ such that 
+\begin_inset Formula $\mathbf{y=z=x}.$
+\end_inset
+
+ As it stands, this will always route information from 
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+ to 
+\begin_inset Formula $\mathbf{y}$
+\end_inset
+
+.
+ However, an interesting feature of the basal ganglia (and of our model
+ of the basal ganglia) is that the output neurons are active for all actions
+ 
+\emph on
+except
+\emph default
+ for the one that has been selected.
+ This means we can simply connect the output neurons for this action from
+ the basal ganglia to the neural population 
+\begin_inset Formula $\mathbf{z}$
+\end_inset
+
+ with strong negative weights (i.e.
+ without using the NEF).
+ This means that whenever the action is 
+\emph on
+not
+\emph default
+ selected, the neurons in 
+\begin_inset Formula $\mathbf{z}$
+\end_inset
+
+ will stop firing, resulting in a value of 0 being passed to 
+\begin_inset Formula $\mathbf{y}$
+\end_inset
+
+.
+ These 
+\begin_inset Formula $\mathbf{z}$
+\end_inset
+
+ neurons form our model of the thalamus.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename cortex_bg_thalamus.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:cortex_bg_thalamus"
+
+\end_inset
+
+Proposed mapping between the SPA action selection system and the neuroanatomy
+ of the cortex-basal ganglia-thalamus loop.
+ Arrows indicate connections between the three areas.
+ At a functional level, brain states from the cortex are mapped through
+ the 
+\begin_inset Formula $\mathbf{M}_{b}$
+\end_inset
+
+ matrix to the basal ganglia.
+ Each row in such a matrix specifies a known context for which the basal
+ ganglia will choose an appropriate action.
+ The product of the current cortical state and 
+\begin_inset Formula $\mathbf{M}_{b}$
+\end_inset
+
+ provides a measure of how similar the current state is to each of the known
+ contexts.
+ The output of the basal ganglia disinhibits the appropriate areas of thalamus.
+ Thalamus, in turn, is mapped through the matrix 
+\begin_inset Formula $\mathbf{M}_{c}$
+\end_inset
+
+ back to the cortex.
+ Each column of this matrix specifies an appropriate cortical state that
+ is the consequence of the selected action.
+ The relevant anatomical structures are pictured on the right (from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+ with permission).
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Using this architecture, we can implement a controlled cognitive system.
+ To understand how this structure operates, we can begin by thinking of
+ it as a neural implementation of a classical 
+\shape italic
+production system
+\shape default
+, a standard approach for explaining human cognition (although the SPA is
+ more computationally powerful 
+\begin_inset CommandInset citation
+LatexCommand cite
+after " chp. 7"
+key "Eliasmith2013"
+
+\end_inset
+
+).
+ A production system consists of a large set of IF-THEN rules.
+ At any moment in time only one of those rules can be active (determined
+ by which rule's IF condition best matches the current situation).
+ When a rule 
+\begin_inset Quotes eld
+\end_inset
+
+fires
+\begin_inset Quotes erd
+\end_inset
+
+, the THEN part of that rule is taken to indicate the cognitive action that
+ should be taken (e.g., moving information from the visual system to working
+ memory, modifying certain information, moving information from working
+ memory to the speech areas, etc.).
+ Psychologists have consistently inferred from behavior that the human brain
+ requires approximately 50 milliseconds to select and execute such a cognitive
+ action 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Anderson2007"
+
+\end_inset
+
+.
+ The timing within our simulations is similar 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2010a"
+
+\end_inset
+
+, but in that case the timing is due to the neurotransmitter time constants
+ measured from the relevant physiological characteristics of neurons, providing
+ a more biophysical explanation of timing phenomena.
+\end_layout
+
+\begin_layout Standard
+In building this neural architecture, we generalize the IF portion of a
+ rule to be a utility calculation, and the THEN portion of the rule to be
+ a routing control signal.
+ As an example, consider the following rule: 
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $U_{i}=\mathbf{visual}\cdot(\mathbf{A+B+C+D+...)}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $R_{i}:\mathbf{visual\rightarrow memory}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+where 
+\begin_inset Formula $U_{i}$
+\end_inset
+
+ is the utility of the 
+\begin_inset Formula $i$
+\end_inset
+
+th rule and 
+\begin_inset Formula $R_{i}$
+\end_inset
+
+ is the routing that should occur when this rule's utility is higher than
+ all the other utility values.
+ The utility calculation for this rule consists of taking the dot product
+ between whatever is currently represented in the visual system, and the
+ sum of already known representations of the letters A-Z.
+ This means the utility will be high if there is a letter in the visual
+ system, and low otherwise.
+ If utility is high, this rule is likely to be selected and then the resulting
+ routing would be affected: i.e., the visual item would be put into working
+ memory.
+ In short, this particular rule says IF the visual system currently contains
+ a letter (i.e., any of the semantic pointers for A, B, C, D, and so on),
+ THEN remember that letter.
+ Note that even if the vector stored in the visual field is not exactly
+ one of these letters, this rule will still have a high utility and will
+ be chosen by the basal ganglia (assuming no other rule has a higher utility).
+ To implement this rule, we form connections between the 
+\series bold
+
+\begin_inset Formula $\mathbf{visual}$
+\end_inset
+
+
+\series default
+ neural population and the neurons in the basal ganglia representing the
+ input utility of the 
+\begin_inset Formula $i$
+\end_inset
+
+th rule.
+ These connections are set using the NEF to compute the linear function
+ 
+\begin_inset Formula $U_{i}=\mathbf{visual}\cdot(\mathbf{A+B+C+D+...)}$
+\end_inset
+
+.
+ To implement the effect of the rule, we add neurons to the thalamus that
+ simply take in the value from the 
+\series bold
+
+\begin_inset Formula $\mathbf{visual}$
+\end_inset
+
+
+\series default
+ neurons and output that same value to the 
+\series bold
+
+\begin_inset Formula $\mathbf{memory}$
+\end_inset
+
+
+\series default
+ neurons (computing the identity function each time).
+ A purely inhibitory connection is then made from the 
+\begin_inset Formula $i$
+\end_inset
+
+th output of the basal ganglia to these new neurons in the thalamus.
+ Thus, when this action is 
+\emph on
+not
+\emph default
+ chosen (i.e.
+ when it is not the action with the highest utility), the output from the
+ basal ganglia will inhibit these neurons, stopping the information from
+ passing through.
+ When the action is chosen, this inhibition is released, allowing the effect
+ of the rule to occur.
+\end_layout
+
+\begin_layout Standard
+Note that despite our characterization of the functioning of the system
+ as implementing a rule, it is doing something much more computationally
+ powerful.
+ The particular cases mentioned here only make use of linear functions to
+ compute 
+\begin_inset Formula $U_{i}$
+\end_inset
+
+, but the NEF allows for nonlinear functions as well.
+ Furthermore, the action selection system gives a more flexible comparison
+ system than the strict if-and-only-if approach seen in standard production
+ systems.
+ Indeed, this same system can be used for Bayesian expectation maximization
+ (see 
+\begin_inset CommandInset citation
+LatexCommand cite
+after " chp. 7"
+key "Eliasmith2013"
+
+\end_inset
+
+ for details).
+ As a result, the 
+\begin_inset Quotes eld
+\end_inset
+
+rules
+\begin_inset Quotes erd
+\end_inset
+
+ of the SPA are significantly more computationally powerful than the logical
+ structures found in standard production systems.
+\end_layout
+
+\begin_layout Standard
+Returning to the example at hand, we can add other rules; for instance,
+ rules to traverse the alphabet.
+ One way to implement traversing the alphabet is to add 25 rules of the
+ same form as the following:
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $U_{i}=\mathbf{memory}\cdot\mathbf{G}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $R_{i}:\mathbf{H\rightarrow memory}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+This rule says IF the item in memory is G, THEN replace it with H.
+ In essence a set of rules like this determines a set of state transitions
+ than can either terminate or be cyclic.
+ The result of simulating this particular rule set can be seen in Figure
+ 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:alphabet_routing"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename alphabet_routing.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:alphabet_routing"
+
+\end_inset
+
+Routing information to give a sequence of actions.
+ The decoded content of working memory is shown on top.
+ This is the similarity (dot product) of the decoded vector with the (randomly
+ chosen) ideal vectors for the different letters of the alphabet (Equation
+ 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:dec"
+
+\end_inset
+
+).
+ The lower half of the graph shows spiking output from the basal ganglia
+ indicating the action to perform.
+ The output from the basal ganglia is inhibitory, so the chosen action is
+ the one for which the neurons 
+\shape italic
+do not
+\shape default
+ fire.
+ The 
+\begin_inset Formula $\mathbf{look}$
+\end_inset
+
+ action takes information from visual cortex and routes it to working memory
+ (in this case 
+\begin_inset Formula $\mathbf{F}$
+\end_inset
+
+; from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+ with permission).
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+To increase the flexibility of the system, it is possible to introduce routing
+ actions that manipulate vectors as they are passed from one component to
+ another.
+ This is vital for performing transformations of structured representations.
+ For example, simple question answering tasks that query sentence-like represent
+ations can be implemented in this manner.
+ Consider the sentence:
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $\mathbf{S}=\mathbf{statement}+\mathbf{blue}\circledast\mathbf{circle}+\mathbf{red}\circledast\mathbf{square}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+which indicates that there is a blue circle and a red square presented to
+ the system.
+ We would like to be able to ask an arbitrary question of this kind of sentence,
+ perhaps 
+\begin_inset Quotes eld
+\end_inset
+
+What is red?
+\begin_inset Quotes erd
+\end_inset
+
+ This question can be formulated as
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $\mathbf{question}+\mathbf{red}.$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+We expect the system to respond with the vector for 
+\begin_inset Formula $\mathbf{square}$
+\end_inset
+
+ when provided with this question.
+ In this simple example we do not consider the problem of sequentially presentin
+g each word and constructing the relevant representation.
+ For a description of the rules and processing units needed to perform that
+ additional function, see 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "stewart2013,choo2013"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+As a result, this simple case can be implemented with two basal ganglia
+ rules.
+ The first handles remembering the initial statement about the environment:
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $U_{i}=\mathbf{visual\cdot statement}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $R_{i}:\mathbf{visual\rightarrow memory}.$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+This rule will move what ever is in the visual system to working memory.
+ The second handles the question:
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $U_{i}=\mathbf{visual\cdot question}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $R_{i}:\mathbf{memory\circledast visual'\rightarrow output},$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+which indicates that the question should be used to decode the memory to
+ produce an answer
+\end_layout
+
+\begin_layout Standard
+These two rules will handle any question answering task of this form.
+ If we provide the network with the input described above, the first rule
+ will cause S to be stored in memory.
+ When the question appears, the second rule will cause that value, bound
+ with the inverse of the question, to be output.
+ This gives the following result:
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $(\mathbf{statement}+\mathbf{blue}\circledast\mathbf{circle}+\mathbf{red}\circledast\mathbf{square})\circledast(\mathbf{\mathbf{question}+red})\mathbf{'}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $=(\mathbf{statement}+\mathbf{blue}\circledast\mathbf{circle}+\mathbf{red}\circledast\mathbf{square})\circledast(\mathbf{\mathbf{question'}+red'})$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $=\mathbf{red}\circledast\mathbf{square}\circledast\mathbf{red'+}\mathbf{red}\circledast\mathbf{square}\circledast\mathbf{question'+...}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $\approx\mathbf{square}\mathbf{+}\mathbf{red}\circledast\mathbf{square}\circledast\mathbf{question'+...}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Since the binding operation produces vectors that are highly dissimilar
+ to the inputs, the extra terms will all be dissimilar to 
+\begin_inset Formula $\mathbf{square}$
+\end_inset
+
+, and essentially act as a noise term.
+ Therefore, the resulting output vector will be similar to 
+\begin_inset Formula $\mathbf{square}$
+\end_inset
+
+, in the sense that it will have a larger dot product with 
+\begin_inset Formula $\mathbf{square}$
+\end_inset
+
+ than with any other item in the vocabulary.
+ We have shown that this representation is sufficient to accurately decode
+ up to eight items from a standard adult vocabulary size of 60,000-100,000
+ items 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2010"
+
+\end_inset
+
+.
+ To achieve this, we need approximately 500-dimensional vectors.
+ Interestingly, we find that the neural models generated by the NEF necessary
+ to implement circular convolution on 500-dimensional vectors are consistent
+ with the anatomical connectivity found in human cortex 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename Answering-questions.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:Answering-questions"
+
+\end_inset
+
+Question answering with neurons.
+ The indicated visual input is provided to the network during the periods
+ shaded in gray.
+ For these two examples, the same statement is provided to the network,
+ but then a different question is given.
+ The decoded vector from the output population is shown by giving its similarity
+ to the ideal vectors for the possible answers.
+ For the first question, the correct answer is 
+\begin_inset Formula $\mathbf{square}$
+\end_inset
+
+ and for the second question the correct answer is 
+\begin_inset Formula $\mathbf{circle}$
+\end_inset
+
+ (from 
+\begin_inset CommandInset citation
+LatexCommand citealp
+key "Stewart2010b"
+
+\end_inset
+
+ with permission).
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Finally, we note that the 55 million neurons 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Beckmann1997"
+
+\end_inset
+
+ found in the input nucleus of the basal ganglia (i.e., striatum) give an
+ upper bound of one to two million rules for human cognition.
+ This is because those neurons need to accurately represent 
+\series bold
+
+\begin_inset Formula $\mathbf{U}$
+\end_inset
+
+
+\series default
+ and we generally find that 30 to 50 neurons per 
+\series bold
+
+\begin_inset Formula $\mathbf{U}_{i}$
+\end_inset
+
+
+\series default
+ value is sufficient accuracy for the models we have built.
+ Determining what these rules may be is a significant, outstanding research
+ question, but we believe that the action selection system described here
+ will continue to function as expected at that scale.
+\end_layout
+
+\begin_layout Subsection
+\begin_inset CommandInset label
+LatexCommand label
+name "sub:Learning"
+
+\end_inset
+
+Learning
+\end_layout
+
+\begin_layout Standard
+The NEF allows very large-scale neural models to be built via an analytic
+ closed-form optimization, rather than through online or batch learning,
+ as is standard for neural network research.
+ However, complex cognitive systems exhibit adaptive behavior based on experienc
+e.
+ To account for adaptation, we can use the NEF to generate the initial connectio
+n weights of a model, and then introduce a learning rule on 
+\shape italic
+\emph on
+some
+\shape default
+\emph default
+ of those connections.
+ Importantly, the same rule is not applied everywhere throughout the model;
+ as in the real brain, some connections are more malleable than others.
+\end_layout
+
+\begin_layout Standard
+We have developed a spike-timing dependent plasticity (STDP) learning rule
+ that is a more realistic version of the standard Hebbian 
+\begin_inset Quotes eld
+\end_inset
+
+neurons that fire together, wire together
+\begin_inset Quotes erd
+\end_inset
+
+ principle 
+\begin_inset CommandInset citation
+LatexCommand citeyearpar
+key "Hebb1949f"
+
+\end_inset
+
+.
+ It is a local rule, meaning that all the information needed to implement
+ it is available locally at a particular synapse, and it matches observed
+ adaptive timing effects in individual neurons 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "bekolay2013"
+
+\end_inset
+
+.
+ This learning rule combines the well-known homeostatic BCM rule 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Bienenstock1982y"
+
+\end_inset
+
+ with an error-driven spiking rule 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "MacNeil2011a"
+
+\end_inset
+
+, making it a homeostatic, prescribed error sensitivity (hPES) rule.
+\end_layout
+
+\begin_layout Standard
+The hPES rule is as follows
+\begin_inset Formula $ $
+\end_inset
+
+
+\begin_inset Formula $ $
+\end_inset
+
+
+\begin_inset Formula 
+\begin{eqnarray*}
+\Delta\omega_{ij} & = & \kappa\alpha_{j}a_{i}(S\mathbf{e}_{j}\cdot\mathbf{E}+(1-S)a_{j}-\theta))
+\end{eqnarray*}
+
+\end_inset
+
+where 
+\begin_inset Formula $0\leq S\leq1$
+\end_inset
+
+ is the relative weight of the supervised and unsupervised terms, 
+\begin_inset Formula $\Delta\omega_{ij}$
+\end_inset
+
+ is the change in synaptic weight, 
+\begin_inset Formula $\kappa$
+\end_inset
+
+ is a learning rate, 
+\begin_inset Formula $\alpha_{j}$
+\end_inset
+
+ is the gain on the postsynaptic neuron, 
+\begin_inset Formula $a_{i}$
+\end_inset
+
+ is the postsynaptic filtered spiking activity from the presynaptic neuron,
+ 
+\begin_inset Formula $\mathbf{e}_{j}$
+\end_inset
+
+ is the encoding vector of the postsynaptic neuron, 
+\begin_inset Formula $\mathbf{E}$
+\end_inset
+
+ is an error signal (e.g.
+ via a modulatory or non-modulatory neural signal), 
+\begin_inset Formula $a_{j}$
+\end_inset
+
+ is the filtered postsynaptic neural activity, and 
+\begin_inset Formula $\theta$
+\end_inset
+
+ is a modification threshold that imposes homeostasis on the postsynaptic
+ neuron.
+\end_layout
+
+\begin_layout Standard
+The hPES rule simultaneously addresses limitations of both standard Hebbian
+ learning rules and STDP.
+ In particular, unlike most standard rules hPES is able to account for precise
+ spike time data, and unlike most STDP (and standard Hebbian) rules it is
+ able to relate synaptic plasticity directly to the vector space represented
+ by an ensemble of neurons.
+ That is, the rule can tune connection weights that compute nonlinear functions
+ of the high-dimensional vector being represented by the spiking patterns
+ in the neurons.
+ Unlike past proposals, hPES is able to do this because it relies on an
+ understanding of the NEF decomposition of connection weights.
+ This decomposition makes it evident how to take advantage of high-dimensional
+ error signals, which past rules have either been unable to incorporate
+ or attempted to side-step 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Gershman2010"
+
+\end_inset
+
+.
+ Thus, hPES can be usefully employed in a biologically plausible network
+ that can be characterized as representing and transforming a vector in
+ spiking neurons; i.e., precisely the kind of networks employed in the SPA.
+ 
+\end_layout
+
+\begin_layout Standard
+We have shown that the hPES rule can learn the connections needed to perform
+ a wide variety of functions 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "bekolay2013,MacNeil2011a"
+
+\end_inset
+
+.
+ That is, instead of using the NEF equations to solve for connection weights,
+ it would also be possible to learn those connections using our hPES rule.
+ For example, Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:stdp-network-structure"
+
+\end_inset
+
+ shows this rule learning a two-dimensional identity function.
+ This optimization is much slower than simply using the NEF to solve for
+ the resulting connection weights, but it demonstrates the rule's ability
+ to learn the same functions online.
+ Importantly, learning a function in this manner requires an error signal.
+ The system will learn whatever function is consistent with that error signal.
+ 
+\end_layout
+
+\begin_layout Standard
+In the real brain, error signals have many forms.
+ Perhaps most famously modulatory learning has been associated with the
+ neurotransmitter dopamine in both the cortex and basal ganglia.
+ The dopamine signal is often considered a reinforcement or reward signal,
+ indicating when actions are rewarded (or not).
+ Dopamine acts to help modify the connections from the cortex to basal ganglia,
+ and is thought to play a central role adjusting actions to deal with a
+ changing environment 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Hollerman1998,Maia2009"
+
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+We incorporate this learning into the Semantic Pointer Architecture by providing
+ a reward signal and using it to adjust the utility of the rules in the
+ basal ganglia.
+ This gives the system the capability of reinforcement learning (RL) 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Sutton1981q"
+
+\end_inset
+
+.
+ We have included basic RL capabilities in Spaun (see section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sec:Spaun"
+
+\end_inset
+
+), and in more recent work described a model that is able to perform RL
+ in semi-Markov Decision Process environments (i.e.
+ environments where there are arbitrary delays between action and reward),
+ which is significantly more challenging problem than that addressed by
+ Spaun 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "rasmussen2013b"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename stdp-network-structure.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:stdp-network-structure"
+
+\end_inset
+
+Learning a function.
+ a) Rather than solving for the ideal connection weights to compute the
+ two-dimensional identity function, we start with random connections on
+ the plastic connection and provide an error signal from a separate neural
+ population.
+  The hPES rule adjusts the connections between the input and output.
+ A network learning a 2D communication channel.
+ b) The network learns to approximate the desired function.
+ Over time the decoded output (solid lines) converge to the desired output
+ (dotted lines).
+ The error signal is computed by the neural population 
+\begin_inset Quotes eld
+\end_inset
+
+err
+\begin_inset Quotes erd
+\end_inset
+
+ as the difference between the two.
+ The same network structure can be used to learn most nonlinear vector functions
+ (from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+ with permission).
+ 
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+The Overall Architecture
+\end_layout
+
+\begin_layout Standard
+The previous sections detail how to make models of particular neural areas
+ that perform particular cognitive functions such as memory (integration)
+ or the binding operation (circular convolution).
+ It also describes how these components may encorporate learning, and how
+ the the flow of information between the components can be controlled.
+ The result is a general cognitive architecture where every component can
+ be implemented in neurons.
+ 
+\end_layout
+
+\begin_layout Standard
+When we design such systems, we have found that the models of particular
+ neural areas (or modules) are all of a particular form, shown in Figure
+ 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:SPA-subsystem-interface"
+
+\end_inset
+
+.
+ This core structure can be used for vision, audition, motor control, working
+ memory, pattern completion, and so on.
+ The details of exactly what function is being computed, of course, vary
+ by brain area.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename SPA-subsystem-interface.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:SPA-subsystem-interface"
+
+\end_inset
+
+ A generic component within the Semantic Pointer Architecture.
+ Inputs are generally presented at the bottom interface, and the module
+ preforms some function(s) on the input to create a compressed representation.
+ The action selection system (described below) can take these results, transform
+ them, and route them to other components.
+ Many components can also be run in reverse, computing an (approximate)
+ inverse operation, which decompresses or dereferences the pointer.
+ This provides for hierarchical, structured representation and cognitive
+ processing.
+ (Reproduced with permission from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+.)
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:the-entire-SPA"
+
+\end_inset
+
+ combines these basic components together with a control system.
+ The separate components can be thought of as physically distinct areas
+ of the brain, each of which can perform one type of operation on its inputs.
+ The control system is responsible for ensuring that the right information
+ is routed to the right component at the right time.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename the-entire-SPA.eps
+	width 3.5in
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:the-entire-SPA"
+
+\end_inset
+
+A general schema for Semantic Pointer Architecture models.
+ A full SPA model consists of multiple components as in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:SPA-subsystem-interface"
+
+\end_inset
+
+.
+ Dark black lines are projections carrying semantic pointer representations
+ between parts of the system, while thinner lines indicate control and error
+ signals.
+ (Reproduced with permission from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+.)
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+In particular, the 
+\begin_inset Quotes eld
+\end_inset
+
+semantic pointers
+\begin_inset Quotes erd
+\end_inset
+
+ used by the SPA are compressed representations, where the compression 
+\shape italic
+maintains similarity information
+\shape default
+.
+ That is, the vector for 
+\begin_inset Quotes eld
+\end_inset
+
+dogs chase cats
+\begin_inset Quotes erd
+\end_inset
+
+ will be similar to the vector for 
+\begin_inset Quotes eld
+\end_inset
+
+dogs chase cars
+\begin_inset Quotes erd
+\end_inset
+
+ (where similarity is measured as the dot product between vectors), but
+ will be much less similar to 
+\begin_inset Quotes eld
+\end_inset
+
+cats chase dogs
+\begin_inset Quotes erd
+\end_inset
+
+ and not at all similar to 
+\begin_inset Quotes eld
+\end_inset
+
+cats ignore dogs
+\begin_inset Quotes erd
+\end_inset
+
+.
+ These combined vectors are of the same length as the original vectors,
+ so there is certainly a loss of imformation in this compression of multiple
+ vectors into a single vector.
+ However, it is generally possible to recover the original high-dimensional
+ representation (or something very similar) thanks to the inverse operation.
+ Because of this compression/decompression relationship, similar inputs
+ will produce similar outputs.
+\end_layout
+
+\begin_layout Standard
+In short, semantic pointers are compact ways of referencing large amounts
+ of data; consequently they function similarly to 
+\begin_inset Quotes eld
+\end_inset
+
+pointers
+\begin_inset Quotes erd
+\end_inset
+
+ as understood in computer science.
+ Typically, in computer science a 
+\begin_inset Quotes eld
+\end_inset
+
+pointer
+\begin_inset Quotes erd
+\end_inset
+
+ is the address of some large amount of data stored in memory.
+ Pointers are easy to transmit, manipulate and store, so they can act as
+ an efficient proxy for the data they point to.
+ Semantic pointers provide the same kind of efficiency benefits in a neural
+ setting.
+ This is why we use them to transfer information between cognitive modules.
+\end_layout
+
+\begin_layout Standard
+Unlike pointers in computer science, however, semantic pointers are 
+\emph on
+semantic
+\emph default
+.
+ That is, they are systematically related to the information that they are
+ used to reference.
+ This means that semantic pointers carry similarity information that is
+ derived from their source, in contrast to an arbitrary index that does
+ not contain semantic information, as generally used in modern computers.
+ 
+\end_layout
+
+\begin_layout Standard
+Of course, we do not have to use the same compression operation everywhere,
+ and indeed there are many we have not explored in the SPA (e.g.
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "SalHinSH07"
+
+\end_inset
+
+).
+ For vision (and other sensory modalities), we learn this compression from
+ the structure of the sensory input.
+ This is the same approach taken by vision researchers who use Deep Belief
+ Networks 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Hinton2006,Tang2010"
+
+\end_inset
+
+.
+ However, for cognitive operations such as combining concepts together into
+ structured representations, we use the circular convolution described above.
+ 
+\end_layout
+
+\begin_layout Subsection
+SPA in Nengo
+\end_layout
+
+\begin_layout Standard
+All of the SPA components discussed above can be built in Nengo using the
+ scripting system.
+ However, to simplify the creation of these cognitive models, we have developed
+ an additional library that assists in the creation of models based on the
+ SPA characterization of the cortex, basal ganglia, and thalamus loop.
+ 
+\end_layout
+
+\begin_layout Standard
+Individual processing modules are specified using the standard NEF libraries.
+ To connect them, however, we use a specialized syntax for defining the
+ rules that can be used to route information between areas.
+ For example, the following code creates the question answering model from
+ Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Answering-questions"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout LyX-Code
+class Rules:
+\end_layout
+
+\begin_layout LyX-Code
+    def store(visual='STATEMENT'):
+\end_layout
+
+\begin_layout LyX-Code
+        set(memory=visual)
+\end_layout
+
+\begin_layout LyX-Code
+    def recall(visual='QUESTION'):
+\end_layout
+
+\begin_layout LyX-Code
+        set(output=memory*~visual)
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+class QuestionAnsweringModel(spa.SPA):
+\end_layout
+
+\begin_layout LyX-Code
+    dimensions = 512                   
+\end_layout
+
+\begin_layout LyX-Code
+    visual = spa.Buffer(feedback=0)     
+\end_layout
+
+\begin_layout LyX-Code
+    output = spa.Buffer(feedback=0)
+\end_layout
+
+\begin_layout LyX-Code
+    memory = spa.Buffer(feedback=1)             
+\end_layout
+
+\begin_layout LyX-Code
+    
+\end_layout
+
+\begin_layout LyX-Code
+    bg = spa.BasalGanglia(Rules)
+\end_layout
+
+\begin_layout LyX-Code
+    thalamus = spa.Thalamus(bg)
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+net = nef.Network('Question Answering')
+\end_layout
+
+\begin_layout LyX-Code
+model = QuestionAnsweringModel(net)
+\end_layout
+
+\begin_layout Standard
+In this model, the initial Rules specify the two routing rules discussed
+ above.
+ The second part of the code describes the cortical structure of the system.
+ Here, there are three 
+\begin_inset Quotes eld
+\end_inset
+
+Buffers
+\begin_inset Quotes erd
+\end_inset
+
+, which are neural ensembles that can store a vector representation.
+ In this case, the number of dimensions for that vector is set to 512.
+ The feedback argument specifies whether or not these neural ensemble use
+ the dynamics principle to store their own state.
+ When feedback is set to 0 there is no recurrence.
+ As noted in section 2.3, this means that if input is given to the visual
+ system it will decay very quickly, due to the short time constant of the
+ filter 
+\begin_inset Formula $h(t)=e^{-t/\tau}$
+\end_inset
+
+ introduced by the post-synaptic current.
+ However, with feedback equal to 1, the dynamics principle is used to construct
+ an integrator (
+\series bold
+
+\begin_inset Formula $\mathbf{\frac{\mathrm{d}x}{\mathrm{dt}}=}\mathbf{u}$
+\end_inset
+
+
+\series default
+).
+ This, ideally, would result in a system with an effectively infinite time
+ constant.
+ However, the neural approximation of the integrator will never be perfect
+ (with a finite number of neurons).
+ This means that the stored 
+\series bold
+
+\begin_inset Formula $\mathbf{x}$
+\end_inset
+
+
+\series default
+ value will slowly drift, resulting in information decay over time, as expected.
+\end_layout
+
+\begin_layout Section
+\begin_inset CommandInset label
+LatexCommand label
+name "sec:Spaun"
+
+\end_inset
+
+Semantic Pointer Architecture Unified Network (Spaun)
+\end_layout
+
+\begin_layout Standard
+The previous sections described our general approach to building large-scale
+ models using the SPA.
+ In sum, our approach is to: 1) identify particular computational functions
+ that need to be computed by a cognitive system; 2) build neural components
+ that implement those functions; and 3) determine how to route information
+ between the components using the basal ganglia to provide integrated function.
+ This approach has recently allowed us to build what is currently the first
+ brain model that is capable of performing cognitive tasks.
+ The resulting 2.5 million neuron model is called the Semantic Pointer Architectu
+re Unified Network, or 
+\begin_inset Quotes eld
+\end_inset
+
+Spaun
+\begin_inset Quotes erd
+\end_inset
+
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+.
+ Spaun is able to perceive visual input through a 28x28 pixel retina, remember
+ that information, act on it as appropriate, and generate motor output that
+ moves a physically-modelled arm to write numbers (see Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:spikeplot"
+
+\end_inset
+
+a).
+\end_layout
+
+\begin_layout Standard
+Many of the elements of Spaun have been described in earlier work, including
+ components for vision 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Tang2010"
+
+\end_inset
+
+, recognition 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2010"
+
+\end_inset
+
+, serial working memory 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Choo2010"
+
+\end_inset
+
+, pattern matching 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Rasmussena"
+
+\end_inset
+
+, reward processing 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Bekolay2011a"
+
+\end_inset
+
+, and motor control 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Dewolf"
+
+\end_inset
+
+.
+ Together, these and other components allow Spaun to cover 20 anatomical
+ brain areas, while being consistent in terms of the large-scale connectivity
+ between and within these regions and the neurotransmitter time constants
+ observed within these regions.
+ To put this in perspective, the human brain has approximately 1000 areas
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "hagmann2008"
+
+\end_inset
+
+ (and 80 billion neurons), so much work remains to be done.
+\end_layout
+
+\begin_layout Standard
+Nevertheless, one key feature of Spaun is that it can use its neural components
+ flexibly, thanks to the control structure provided by the basal ganglia.
+ As a result, Spaun can perform eight different tasks, while the model itself
+ remains unchanged.
+ While each task uses many of the components of Spaun, they do so in a variety
+ of ways.
+ For example, in the list memory task Spaun is shown a list and then repeats
+ it back, while in the question answering task it is first shown a list,
+ and then it waits for a question about the list.
+ Importantly, we do not make any changes to Spaun to allow it to perform
+ different tasks.
+ Rather, we 
+\shape italic
+tell
+\shape default
+ Spaun to change tasks.
+ Since the only input to Spaun is its 28x28 visual field, we do this by
+ presenting the letter 
+\begin_inset Quotes eld
+\end_inset
+
+A
+\begin_inset Quotes erd
+\end_inset
+
+ followed by a number that indicates the task to perform.
+ Spaun responds appropriately to this perceptual input given these two control
+ rules:
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $U_{1}=\mathbf{visual\cdot A}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $R_{1}:\mathbf{NONE\rightarrow task}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $U_{2}=(\mathbf{visual\cdot(ZERO+ONE+TWO+...)}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset space \hspace{}
+\length 0.25in
+\end_inset
+
+
+\begin_inset Formula $\begin{array}{ccc}
+ &  & +\mathbf{task\cdot NONE})/2\end{array}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+
+\family roman
+\series medium
+\shape up
+\size normal
+\emph off
+\bar no
+\strikeout off
+\uuline off
+\uwave off
+\noun off
+\color none
+\begin_inset Formula $R_{2}:\mathbf{visual\rightarrow task}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Quotation
+\begin_inset Formula $ $
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The first rule clears the part of memory that keeps track of whatever task
+ Spaun is currently doing when Spaun sees the letter A (by setting it to
+ the random vector
+\series bold
+ 
+\begin_inset Formula $\mathbf{NONE}$
+\end_inset
+
+
+\series default
+).
+ The second rule will only have a high utility if the task is 
+\series bold
+
+\begin_inset Formula $\mathbf{NONE}$
+\end_inset
+
+
+\series default
+ and a number has been presented.
+ When this occurs, that number is sent to the task memory.
+ To implement the various tasks, more rules are added, each of which has
+ as part of their utility calculation a dependency on the task memory.
+ This makes the rules task-specific, but the actual neural components that
+ the rules make use of are general across tasks.
+ The eight tasks Spaun can perform (digit recognition, digit style copying,
+ list memory, question answering, addition by counting, reinforcement learning,
+ pattern completion, and the Raven's Progressive matrix intelligence test)
+ are all implemented with only nineteen basal ganglia rules.
+ More information on these tasks can be found in 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+ and Spaun's performance can be viewed in online videos (
+\begin_inset Flex Flex:URL
+status collapsed
+
+\begin_layout Plain Layout
+
+http://nengo.ca/build-a-brain/spaunvideos
+\end_layout
+
+\end_inset
+
+).
+ The overall functional and anatomical architecture of Spaun is shown in
+ Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:spaunarchitecture"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename spaunarchitecture.eps
+	width 3.5in
+
+\end_inset
+
+ 
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:spaunarchitecture"
+
+\end_inset
+
+ The functional and anatomical architecture of Spaun.
+ (a) A breakdown of the separate logical components within Spaun and their
+ connections.
+ The working memory, visual input, and motor output components are typical
+ hierarchies as per Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:SPA-subsystem-interface"
+
+\end_inset
+
+, while the other components compute functions of these representations.
+ From left to right, the components 1) map visual inputs to conceptual represent
+ations, 2) induce relationships between representations, 3) associate input
+ with reward, 4) map conceptual representations to motor actions, and 5)
+ map motor actions to specific patterns of movement.
+ (b) The corresponding neuroanatomical architecture, with matching colors
+ and line styles indicating corresponding functional components.
+ Abbreviations: V1/V2/V4 (primary/secondary/extrastriate visual cortex),
+ AIT/IT (anterior/inferotemporal cortex), DLPFC/VLPFC/OFC (dorso-lateral/ventro-
+lateral/orbito- frontal cortex), PPC (posterior parietal cortex), M1 (primary
+ motor cortex), SMA (supplementary motor area), PM (premotor cortex), v/Str
+ (ventral/striatum), STN (subthalamic nucleus), GPe/i (globus pallidus externus/
+internus), SNc/r (substantia nigra pars compacta/reticulata), VTA (ventral
+ tegmental area).
+ (Reproduced with permission from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012a"
+
+\end_inset
+
+.)
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+As an example of Spaun performing a task, Figure
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:spikeplot"
+
+\end_inset
+
+ shows the list memory task.
+ The input starts with an 
+\begin_inset Quotes eld
+\end_inset
+
+A
+\begin_inset Quotes erd
+\end_inset
+
+ followed by a 
+\begin_inset Quotes eld
+\end_inset
+
+3
+\begin_inset Quotes erd
+\end_inset
+
+, telling Spaun which task to perform.
+ The next input is a series of numbers that it should attempt to remember.
+ When it sees a question mark, it responds by writing out the remembered
+ list.
+ Figure
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:spikeplot"
+
+\end_inset
+
+c shows spiking activity of several parts of the model.
+ Of particular note is DLPFC (dorso-lateral prefrontal cortex), where Spaun
+ is storing the list.
+ The list is stored as a vector, using semantic pointers as described in
+ section 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sub:Structure"
+
+\end_inset
+
+.
+ The DLPFC graph shows the similarity (as measured by the dot product) between
+ the vector stored there (decoded from the spikes using the NEF) and the
+ ideal vector for numbers in different positions.
+ This activity decays over time and becomes less accurate the more items
+ there are in the list.
+ In this particular case, this inaccuracy is enough to cause Spaun to make
+ a mistake: it forgets the fourth item in the list (the eight).
+ Indeed, the model follows a similar forgetting curve to that seen in people
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Choo2010"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\align center
+\begin_inset Graphics
+	filename spikeplot_modified.eps
+	lyxscale 25
+	width 3.5in
+
+\end_inset
+
+ 
+\begin_inset Caption
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:spikeplot"
+
+\end_inset
+
+Spaun performing a serial recall task.
+ Spaun must remember and then write out the sequence 
+\begin_inset Quotes eld
+\end_inset
+
+0, 1, 5, 8, 7, 3
+\begin_inset Quotes erd
+\end_inset
+
+.
+ It has never seen this particular sequence before.
+ a) A snapshot of Spaun while it is seeing the third digit in the list.
+ b) A snapshot of Spaun while it is writing its result.
+ The internal processing of the model is shown in thought bubbles with decoded
+ values overlaid on the spiking activity.
+ Colors on the brain image show overall firing rates in different regions.
+ c) The neural spiking activity of various components of the model (see
+ Figure
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:spaunarchitecture"
+
+\end_inset
+
+ for details).
+ In this particular trial Spaun makes a mistake, forgetting the digit in
+ the middle of the list (just as human subjects often do).
+ The spiking activity in DLPFC is decoded to reveal the cause of this mistake
+ (the vector stored in memory has become too dissimilar to the ideal representat
+ion of an 8).
+ (Reproduced with permission from 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+.)
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+In fact, Spaun can be used to match a wide variety of data across many scales.
+ Its components have been shown to reproduce spike patterns in the basal
+ ganglia during a reinforcement learning task 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Bekolay2011a"
+
+\end_inset
+
+, single neuron tuning curves found in primary visual cortex 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+, population spectrogram shifts during a working memory task 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+, recognition accuracy on naturalistic stimuli (i.e., handwritten digits)
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+, and reaction times during a counting task 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+, and similar results apply to the complete model as well 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+.
+ In short, because the model implements cognitive behaviors using spiking
+ neurons that are anatomically and physiologically matched to their biological
+ counterparts, its performance can be constrained by data from single cell
+ physiology through to behavior.
+ By making successful comparisons to diverse constraints, we begin to build
+ the case that Spaun is capturing some important aspects of the biological
+ mechanisms at work in real brains.
+\end_layout
+
+\begin_layout Section
+Discussion
+\end_layout
+
+\begin_layout Standard
+While we believe that models like Spaun are moving us towards a better understan
+ding of brain function, there remain many challenges ahead.
+ It is important to keep in mind that Spaun has 40,000 times fewer neurons
+ than the human brain.
+ Consequently, it is still not clear how well the methods of the SPA will
+ scale, despite encouraging initial results.
+ Similarly, Spaun includes several simplifying assumptions regarding the
+ number and kind of neurotransmitters, and physiological properties of individua
+l neurons.
+ Again, past work using the same methods has incorporated a wider variety
+ of such properties than are found in Spaun, but it remains to be seen how
+ additional biological detail will affect Spaun's functioning.
+ 
+\end_layout
+
+\begin_layout Standard
+In addition to these limitations, it is clear that there are many kinds
+ of brain function not well reflected in Spaun.
+ For instance, the ability of the model to lay down new long term memories
+ is minimal (this only occurs in one of the eight tasks).
+ Similarly, there is little environmental interaction of the model: its
+ single eye remains fixed, and it does not see its own output.
+ Much work remains to be done to determine what additional functions are
+ necessary to allow such a model to be embedded in a dynamic, open-ended
+ environment.
+ Relatedly, learning new cognitive behaviors in such an environment is a
+ well-known challenge with few general, effective solutions.
+ It has not yet been shown how these kinds of models can be used to effectively
+ tackle such challenges.
+\end_layout
+
+\begin_layout Standard
+From a computational perspective, simulating large-scale neural models on
+ conventional computational hardware is difficult.
+ For Spaun, it took approximately 2.5h of simulation time to generate one
+ second of behavior on a high-end workstation.
+ While we believe that this simulation can be made much more efficient (and
+ in the latest version of our software we have made significant improvements
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Bekolay2014"
+
+\end_inset
+
+), it is clear that alternate computing approaches would be advantageous.
+\end_layout
+
+\begin_layout Standard
+A wide variety of these brain-inspired computing devices exist, all based
+ around the idea of having a large number of simple neuron-like components
+ whose spiking activity is based on the sum of their inputs.
+ We have used the NEF as a general method for programming such neuromorphic
+ computers.
+ Examples of using the NEF in this way can be found on efficient digital
+ architectures employing thousands or millions of ARM cores 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Galluppi2012"
+
+\end_inset
+
+, analog architectures that directly incorporate forms of learning 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Corradi"
+
+\end_inset
+
+, and hybrid architectures 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Choudhary2012"
+
+\end_inset
+
+.
+ There are many benefits to this new computing paradigm, including orders
+ of magnitude better power efficiency per computation, robustness to noise
+ and variability, and massive parallelism 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "hasler2013"
+
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+Because the NEF was developed to address systems with these same properties
+ (but in a biological setting), it has proven an effective means of programming
+ such hardware, by indicating what the connection weights should be to achieve
+ different computational results.
+ For example, the NEF has been used to control a robot that can learn by
+ treating training examples as the function to be approximated, to do operationa
+l space control on a 3-joint arm 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Menon2013"
+
+\end_inset
+
+, and to implement a model of the rat hippocampus' path integration ability
+ on a mobile robot 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "galluppi2012live"
+
+\end_inset
+
+.
+ In all of these examples, the algorithms being implemented are well-suited
+ to approximation using the NEF, and so are much more efficient when implemented
+ on neuromorphic hardware than on traditional computing devices.
+\end_layout
+
+\begin_layout Standard
+While current hardware implementations remain small scale compared to models
+ like Spaun, we expect that in the near future, there will be a significant
+ increase in the size of neuromorphic platforms available.
+ Indeed, we expect that a full hardware implementation of Spaun will be
+ completed within the next two years.
+ This co-development of algorithms, programming techniques, and infrastructure
+ in the neuromorphic space, provides fertile ground for designing and testing
+ brain-like models.
+ We believe that such models will allow us both to better understand biological
+ brain function, and to develop a new class of solution to challenging informati
+on processing problems.
+\end_layout
+
+\begin_layout Section
+Conclusion
+\end_layout
+
+\begin_layout Standard
+The theoretical methods and software suite described in this article form
+ a comprehensive tool chain for connecting high-level behavior to low-level
+ neural processes.
+ The Neural Engineering Framework compiles algorithms expressed in terms
+ of vectors and functions on those vectors (or their temporal derivatives)
+ into a neural network that approximates those functions.
+ A wide variety of single cell models can be employed, and accuracy can
+ be improved by increasing the number of neurons used.
+ The NEF thus provides a generic framework for implementing a very large
+ class of functions in networks of biologically plausible spiking neurons.
+\end_layout
+
+\begin_layout Standard
+The Semantic Pointer Architecture is our suggestion of a means of organizing
+ neural models that is consistent with contemporary neuroscience.
+ While it is clearly too early to claim that this is provably how the brain
+ works, we believe that SPA provides a testable ongoing research program,
+ and at the very least provides what is currently the only standard for
+ expressing and manipulating structured, symbol-like representations while
+ being consistent with biological constraints 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2009d,Eliasmith2013"
+
+\end_inset
+
+.
+ It provides a method for flexibly manipulating representations and passing
+ them between different brain areas as appropriate for a given cognitive
+ task.
+ Both the NEF and SPA can also optionally include neural learning rules,
+ providing the system a way to adapt online from experience.
+\end_layout
+
+\begin_layout Standard
+To make these theoretical ideas more practically useful, we have also briefly
+ presented Nengo, a software tool that implements both the NEF and the SPA.
+ This allows a user to specify the high-level function to be implemented
+ (along with whatever neural constraints are appropriate), and Nengo will
+ use the NEF to solve for the connection weights needed, run the resulting
+ model, and collect the results.
+ Nengo has also been shown to scale up well, as it was used to create Spaun,
+ the world's first functional brain simulation, with 2.5 million neurons
+ and over 60 billion synapses.
+\end_layout
+
+\begin_layout Standard
+Combined, these approaches provide a novel method for creating large-scale
+ neural networks that can exhibit high-level cognitive behavior.
+ Our ongoing research involves testing psychological theories by implementing
+ them in neurons and comparing the model performance to human (and animal)
+ performance.
+ Importantly, we can do this comparison based not only on the overt behavior,
+ but also on low-level neural measurements, such as firing patterns in different
+ brain areas.
+ This provides strong constraints on theories of brain function.
+ For example, we find that overall reaction time is strongly connected with
+ the neurotransmitter time constants.
+ Furthermore, we believe accurate models of these neural functions could
+ lead to improved understanding of how particular neural disorders (such
+ as Parkinson's Disease or Alzheimer's Disease) produce their behavioural
+ effects.
+ More research, however, is needed to improve the neural details of these
+ models such that it is possible to damage them in the same way that they
+ are damaged in those diseases.
+\end_layout
+
+\begin_layout Standard
+A more surprising consequence for this research is that it provides a novel
+ method for programming highly parallel hardware.
+ After all, the human brain can be thought of as 100 billion interconnected
+ processors (neurons).
+ Each of these processors are slow, noisy, and can only compute one operation
+ (the neural non-linearity 
+\series bold
+
+\begin_inset Formula $G$
+\end_inset
+
+
+\series default
+), but by connecting them in different ways we can approximate a wide variety
+ of functions.
+ This is a new approach for neuromorphic engineering, and our ongoing collaborat
+ions 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Galluppi2012,Choudhary2012"
+
+\end_inset
+
+ are examining the possibilities for implementing complex cognitive algorithms
+ efficiently.
+\end_layout
+
+\begin_layout Standard
+Simulating the human brain is a monumental task and clearly beyond what
+ a single research group can accomplish.
+ This is why we are interested in helping to create general, open tools
+ that can be applied to many different brain areas and many different kinds
+ of cognitive tasks.
+ We have developed tutorials and documentation to introduce the open-source
+ Nengo software (available at http://nengo.ca).
+ To aid instruction, we have included both a complete scripting system and
+ an integrated drag-and-drop GUI interface for Nengo 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2009l"
+
+\end_inset
+
+.
+ We hope that being able to integrate ideas from psychology, neuroscience,
+ and artificial intelligence and construct large-scale neural models that
+ connect sensory systems, cognitive system, and motor systems makes for
+ an exciting new approach to brain research.
+ We believe these sorts of models will be extremely beneficial for understanding
+ human cognition, treating brain disorders, and developing efficient parallel
+ computation.
+\end_layout
+
+\begin_layout Standard
+\begin_inset CommandInset bibtex
+LatexCommand bibtex
+bibfiles "/Users/celiasmi/Documents/library"
+options "plain"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Biography
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+{Terrence C.
+ Stewart}
+\end_layout
+
+\end_inset
+
+ 
+\begin_inset Argument
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename TerryStewart.png
+	scale 200
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+ recieved a B.A.Sc degree in systems design engineering at the University
+ of Waterloo in 1999, an M.Phil degree in computer science and artificial
+ intelligence at Sussex University in 2000 and a Ph.D.
+ degree in cognitive science from Carleton University in 2007.
+\end_layout
+
+\begin_layout Biography
+He is a post-doctoral research associate in the Department of Systems Design
+ Engineering with the Centre for Theoretical Neuroscience at the University
+ of Waterloo, in Waterloo, Canada.
+ His core interests are in understanding human cognition by building biologicall
+y realistic neural simulations, and he is currently focusing on language
+ processing and motor control.
+\end_layout
+
+\begin_layout Biography
+Dr.
+ Stewart is a Behavioral & Brain Sciences Associate, a member of the Cognitive
+ Science Society, and a founding member of the Biologically Inspired Cognitive
+ Architecture society.
+ He also co-chaired the 2013 International Conference on Cognitive Modelling,
+ held in Ottawa, Canada.
+\end_layout
+
+\begin_layout Standard
+\begin_inset VSpace smallskip
+\end_inset
+
+
+\end_layout
+
+\begin_layout Biography
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+{Chris Eliasmith}
+\end_layout
+
+\end_inset
+
+
+\series bold
+
+\begin_inset Argument
+status open
+
+\begin_layout Plain Layout
+
+\series bold
+\begin_inset Graphics
+	filename n1cjV7o.png
+	lyxscale 50
+	scale 23
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\series default
+ received a B.A.Sc.
+ degree in systems design engineering in 1994 and a M.A.
+ degree in philosophy in 1995 from the University of Waterloo.
+ He received a Ph.D.
+ degree in philosophy from Washington University in St.
+ Louis in 2000.
+\end_layout
+
+\begin_layout Biography
+From 2000-2001 he was a postdocoral researcher with Charlie Anderson in
+ David van Essen's lab at Washington University Medical School.
+ Since then he has been an assistant, associate, and full professor at the
+ University of Waterloo.
+ He is currently Director of the Centre for Theoretical Neuroscience at
+ the University of Waterloo and holds a Canada Research Chair in Theoretical
+ Neuroscience.
+ He has authored or coauthored two books and over 90 publications in philosophy,
+ psychology, neuroscience, computer science, and engineering venues.
+\end_layout
+
+\begin_layout Biography
+Professor Eliasmith holds a P.Eng designation, is associate editor for the
+ journal Cognitive Science, and a member of the Society for Neuroscience,
+ the Canadian Philosophical Association, and the Society for Cognitive Science.
+\end_layout
+
+\end_body
+\end_document

@@ -1,0 +1,755 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass IEEEtran
+\begin_preamble
+\usepackage{epsfig} 
+\end_preamble
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 2
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Large-scale synthesis of functional spiking neural circuits 
+\end_layout
+
+\begin_layout Author
+Terrence C.
+ Stewart and Chris Eliasmith
+\end_layout
+
+\begin_layout Abstract
+In this paper we review the theoretical and software tools used to construct
+ Spaun, the first (and so far only) brain model capable of performing cognitive
+ tasks.
+ This tool set allowed us to configure 2.5 million simple nonlinear components
+ (neurons) with 60 billion connections between them (synapses) such that
+ the resulting model can perform eight different perceptual, motor, and
+ cognitive tasks.
+ To reverse engineer the brain in this way, a method is needed that shows
+ how large numbers of simple components, each of which receives thousands
+ of inputs from other components, can be organized to perform the desired
+ computations.
+ We achieve this through the Neural Engineering Framework (NEF), a mathematical
+ theory that provides methods for systematically generating biologically
+ plausible spiking networks to implement nonlinear and linear dynamical
+ systems.
+ On top of this, we propose the Semantic Pointer Architecture (SPA), a hypothesi
+s regarding some aspects of the organization, function, and representational
+ resources used in the mammalian brain.
+ We conclude by discussing Spaun, which is an example model that uses the
+ SPA and is implemented using the NEF.
+ Throughout, we discuss the software tool Nengo, which allows for the synthesis
+ and simulation of neural models efficiently on the scale of Spaun, and
+ provides support for constructing models using the NEF and the SPA.
+ The resulting NEF/SPA/Nengo combination is a general tool set for both
+ evaluating hypotheses about how the brain works, and for building systems
+ that compute particular functions using neuron-like components.
+\end_layout
+
+\begin_layout Section
+Introduction
+\end_layout
+
+\begin_layout Standard
+In this paper, we describe the methodology and tools we have developed for
+ building large-scale systems from simulated spiking neurons.
+ In particular, we describe two theoretical tools (the Neural Engineering
+ Framework and the Semantic Pointer Architecture) and one software suite
+ (Nengo) that we used to construct what is currently the world's first 
+\emph on
+functional
+\emph default
+ brain model (i.e.
+ one that is capable of performing a variety of cognitive tasks).
+ This model, which we refer to as the Semantic Pointer Architecture Unified
+ Network (or Spaun), consists of 2.5 million simulated spiking neurons whose
+ properties and interconnections are consistent with those found in the
+ human brain.
+ The model receives input in the form of digital images on a virtual retina
+ and produces output that controls a simulated arm.
+ With this framework, Spaun is able to perform eight different tasks, including
+ digit recognition, serial working memory, pattern completion, mental arithmetic
+, and question answering.
+ Furthermore, it is able to switch between these tasks based on its own
+ visual input, meaning that there are no external modifications made to
+ the network between tasks.
+ This sort of cognitive flexibility is a hallmark of cognitive systems,
+ but is difficult to achieve with traditional neural modeling approaches.
+ 
+\end_layout
+
+\begin_layout Standard
+The major goal of this research is to understand how the brain works by
+ reverse-engineering it.
+ We do this by trying to build biologically 
+\emph on
+plausible
+\emph default
+ models of cognitive processes.
+ For us, these are models where the individual components (simulated neurons)
+ can be made as similar to real neurons as desired, and where the large-scale
+ anatomy and connectivity of the brain is respected.
+ While the work described here uses the leaky integrate-and-fire (LIF) model
+ of a neuron (the simplest and most common neuron model that produces spikes),
+ all of the techniques apply to more detailed neural models.
+ Different neurons in different brain areas have different properties, and
+ we use this neurological data to constrain our models.
+ While we do not argue that this is the 
+\emph on
+only 
+\emph default
+way to build such models, we believe that the Neural Engineering Framework
+ (NEF) is a general tool for implementing a very large set of algorithms
+ in components like neurons, and that the Semantic Pointer Architecture
+ is one particular algorithm that can be implemented with the NEF and that
+ we believe is quite promising for matching human performance.
+\end_layout
+
+\begin_layout Standard
+As a side effect of this reverse engineering goal, the Neural Engineering
+ Framework provides a methodology for biomimetic computation.
+\end_layout
+
+\begin_layout Section
+\begin_inset CommandInset label
+LatexCommand label
+name "sec:The-Neural-Engineering"
+
+\end_inset
+
+The Neural Engineering Framework (NEF)
+\end_layout
+
+\begin_layout Standard
+The Neural Engineering Framework (NEF) is a general-purpose system for taking
+ algorithms and implementing them using components such as spiking neurons
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2003m"
+
+\end_inset
+
+.
+ This can be thought of as a 
+\begin_inset Quotes eld
+\end_inset
+
+neural compiler
+\begin_inset Quotes erd
+\end_inset
+
+ where algorithms written in a high-level language are converted into neurons
+ with connections between them.
+ This compilation process works for arbitrary neuron types, and can be constrain
+ed in biologically realistic ways.
+ Importantly, the high-level algorithms must be expressed in terms of vectors
+ and functions on those vectors (including ordinary differential equations).
+ The resulting neural networks approximate the desired functions, and the
+ error of this approximation can be made arbitrarily small by increasing
+ the number of neurons.
+ This makes the NEF ideal for expressing algorithms typically seen in domains
+ such as control theory, and determining their relevance to brain function.
+\end_layout
+
+\begin_layout Standard
+While the NEF can be used to build arbitrary abstract systems such as controlled
+ attractor networks 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2005p"
+
+\end_inset
+
+, we have primarily used it to show how particular capabilities found in
+ real animals might be implemented biologically.
+ This has included path integration in rodents 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Conklin2005b"
+
+\end_inset
+
+, working memory 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Singh2006b"
+
+\end_inset
+
+ and arm movements 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Dewolf"
+
+\end_inset
+
+ in monkeys, and decision-making in rats 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Laubach2010,Liu2011"
+
+\end_inset
+
+ and humans 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Litt2008u"
+
+\end_inset
+
+.
+ We have also taken into account biological constraints such as Dale's Principle
+ 
+\begin_inset CommandInset citation
+LatexCommand citep
+key "Parisien2008c"
+
+\end_inset
+
+ and incorporated biologically realistic learning rules to construct these
+ networks 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "MacNeil2011a,bekolay2013"
+
+\end_inset
+
+.
+ Several overviews of the NEF are available 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2003f,Eliasmith2005p,stewart2012b,Eliasmith2012b"
+
+\end_inset
+
+.
+ The rest of this section serves as a summary of the three main principles
+ within the NEF, plus our software tool Nengo.
+ 
+\end_layout
+
+\begin_layout Standard
+These three principles are sufficient to implement all of our neural models.
+ However, to simplify the process of constructing these models, we have
+ developed an open-source software package known as Nengo (Neural ENGineering
+ Objects) that creates and runs these models.
+ Models can be built in Nengo using a drag-and-drop graphical user interface
+ or specified using the Python scripting language.
+ Full details and documentation can be found online at http://nengo.ca, and
+ in other publications 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2009l"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+In fact, Spaun can be used to match a wide variety of data across many scales.
+ Its components have been shown to reproduce spike patterns in the basal
+ ganglia during a reinforcement learning task 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Bekolay2011a"
+
+\end_inset
+
+, single neuron tuning curves found in primary visual cortex 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+, population spectrogram shifts during a working memory task 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+, recognition accuracy on naturalistic stimuli (i.e., handwritten digits)
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+, and reaction times during a counting task 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2012b"
+
+\end_inset
+
+, and similar results apply to the complete model as well 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Eliasmith2013"
+
+\end_inset
+
+.
+ In short, because the model implements cognitive behaviors using spiking
+ neurons that are anatomically and physiologically matched to their biological
+ counterparts, its performance can be constrained by data from single cell
+ physiology through to behavior.
+ By making successful comparisons to diverse constraints, we begin to build
+ the case that Spaun is capturing some important aspects of the biological
+ mechanisms at work in real brains.
+\end_layout
+
+\begin_layout Section
+Discussion
+\end_layout
+
+\begin_layout Standard
+While we believe that models like Spaun are moving us towards a better understan
+ding of brain function, there remain many challenges ahead.
+ It is important to keep in mind that Spaun has 40,000 times fewer neurons
+ than the human brain.
+ Consequently, it is still not clear how well the methods of the SPA will
+ scale, despite encouraging initial results.
+ Similarly, Spaun includes several simplifying assumptions regarding the
+ number and kind of neurotransmitters, and physiological properties of individua
+l neurons.
+ Again, past work using the same methods has incorporated a wider variety
+ of such properties than are found in Spaun, but it remains to be seen how
+ additional biological detail will affect Spaun's functioning.
+ 
+\end_layout
+
+\begin_layout Standard
+In addition to these limitations, it is clear that there are many kinds
+ of brain function not well reflected in Spaun.
+ For instance, the ability of the model to lay down new long term memories
+ is minimal (this only occurs in one of the eight tasks).
+ Similarly, there is little environmental interaction of the model: its
+ single eye remains fixed, and it does not see its own output.
+ Much work remains to be done to determine what additional functions are
+ necessary to allow such a model to be embedded in a dynamic, open-ended
+ environment.
+ Relatedly, learning new cognitive behaviors in such an environment is a
+ well-known challenge with few general, effective solutions.
+ It has not yet been shown how these kinds of models can be used to effectively
+ tackle such challenges.
+\end_layout
+
+\begin_layout Standard
+From a computational perspective, simulating large-scale neural models on
+ conventional computational hardware is difficult.
+ For Spaun, it took approximately 2.5h of simulation time to generate one
+ second of behavior on a high-end workstation.
+ While we believe that this simulation can be made much more efficient (and
+ in the latest version of our software we have made significant improvements
+ 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Bekolay2014"
+
+\end_inset
+
+), it is clear that alternate computing approaches would be advantageous.
+\end_layout
+
+\begin_layout Standard
+A wide variety of these brain-inspired computing devices exist, all based
+ around the idea of having a large number of simple neuron-like components
+ whose spiking activity is based on the sum of their inputs.
+ We have used the NEF as a general method for programming such neuromorphic
+ computers.
+ Examples of using the NEF in this way can be found on efficient digital
+ architectures employing thousands or millions of ARM cores 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Galluppi2012"
+
+\end_inset
+
+, analog architectures that directly incorporate forms of learning 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Corradi"
+
+\end_inset
+
+, and hybrid architectures 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Choudhary2012"
+
+\end_inset
+
+.
+ There are many benefits to this new computing paradigm, including orders
+ of magnitude better power efficiency per computation, robustness to noise
+ and variability, and massive parallelism 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "hasler2013"
+
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+Because the NEF was developed to address systems with these same properties
+ (but in a biological setting), it has proven an effective means of programming
+ such hardware, by indicating what the connection weights should be to achieve
+ different computational results.
+ For example, the NEF has been used to control a robot that can learn by
+ treating training examples as the function to be approximated, to do operationa
+l space control on a 3-joint arm 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Menon2013"
+
+\end_inset
+
+, and to implement a model of the rat hippocampus' path integration ability
+ on a mobile robot 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "galluppi2012live"
+
+\end_inset
+
+.
+ In all of these examples, the algorithms being implemented are well-suited
+ to approximation using the NEF, and so are much more efficient when implemented
+ on neuromorphic hardware than on traditional computing devices.
+\end_layout
+
+\begin_layout Standard
+While current hardware implementations remain small scale compared to models
+ like Spaun, we expect that in the near future, there will be a significant
+ increase in the size of neuromorphic platforms available.
+ Indeed, we expect that a full hardware implementation of Spaun will be
+ completed within the next two years.
+ This co-development of algorithms, programming techniques, and infrastructure
+ in the neuromorphic space, provides fertile ground for designing and testing
+ brain-like models.
+ We believe that such models will allow us both to better understand biological
+ brain function, and to develop a new class of solution to challenging informati
+on processing problems.
+\end_layout
+
+\begin_layout Section
+Conclusion
+\end_layout
+
+\begin_layout Standard
+The theoretical methods and software suite described in this article form
+ a comprehensive tool chain for connecting high-level behavior to low-level
+ neural processes.
+ The Neural Engineering Framework compiles algorithms expressed in terms
+ of vectors and functions on those vectors (or their temporal derivatives)
+ into a neural network that approximates those functions.
+ A wide variety of single cell models can be employed, and accuracy can
+ be improved by increasing the number of neurons used.
+ The NEF thus provides a generic framework for implementing a very large
+ class of functions in networks of biologically plausible spiking neurons.
+\end_layout
+
+\begin_layout Standard
+The Semantic Pointer Architecture is our suggestion of a means of organizing
+ neural models that is consistent with contemporary neuroscience.
+ While it is clearly too early to claim that this is provably how the brain
+ works, we believe that SPA provides a testable ongoing research program,
+ and at the very least provides what is currently the only standard for
+ expressing and manipulating structured, symbol-like representations while
+ being consistent with biological constraints 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2009d,Eliasmith2013"
+
+\end_inset
+
+.
+ It provides a method for flexibly manipulating representations and passing
+ them between different brain areas as appropriate for a given cognitive
+ task.
+ Both the NEF and SPA can also optionally include neural learning rules,
+ providing the system a way to adapt online from experience.
+\end_layout
+
+\begin_layout Standard
+To make these theoretical ideas more practically useful, we have also briefly
+ presented Nengo, a software tool that implements both the NEF and the SPA.
+ This allows a user to specify the high-level function to be implemented
+ (along with whatever neural constraints are appropriate), and Nengo will
+ use the NEF to solve for the connection weights needed, run the resulting
+ model, and collect the results.
+ Nengo has also been shown to scale up well, as it was used to create Spaun,
+ the world's first functional brain simulation, with 2.5 million neurons
+ and over 60 billion synapses.
+\end_layout
+
+\begin_layout Standard
+Combined, these approaches provide a novel method for creating large-scale
+ neural networks that can exhibit high-level cognitive behavior.
+ Our ongoing research involves testing psychological theories by implementing
+ them in neurons and comparing the model performance to human (and animal)
+ performance.
+ Importantly, we can do this comparison based not only on the overt behavior,
+ but also on low-level neural measurements, such as firing patterns in different
+ brain areas.
+ This provides strong constraints on theories of brain function.
+ For example, we find that overall reaction time is strongly connected with
+ the neurotransmitter time constants.
+ Furthermore, we believe accurate models of these neural functions could
+ lead to improved understanding of how particular neural disorders (such
+ as Parkinson's Disease or Alzheimer's Disease) produce their behavioural
+ effects.
+ More research, however, is needed to improve the neural details of these
+ models such that it is possible to damage them in the same way that they
+ are damaged in those diseases.
+\end_layout
+
+\begin_layout Standard
+A more surprising consequence for this research is that it provides a novel
+ method for programming highly parallel hardware.
+ After all, the human brain can be thought of as 100 billion interconnected
+ processors (neurons).
+ Each of these processors are slow, noisy, and can only compute one operation
+ (the neural non-linearity 
+\series bold
+
+\begin_inset Formula $G$
+\end_inset
+
+
+\series default
+), but by connecting them in different ways we can approximate a wide variety
+ of functions.
+ This is a new approach for neuromorphic engineering, and our ongoing collaborat
+ions 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Galluppi2012,Choudhary2012"
+
+\end_inset
+
+ are examining the possibilities for implementing complex cognitive algorithms
+ efficiently.
+\end_layout
+
+\begin_layout Standard
+Simulating the human brain is a monumental task and clearly beyond what
+ a single research group can accomplish.
+ This is why we are interested in helping to create general, open tools
+ that can be applied to many different brain areas and many different kinds
+ of cognitive tasks.
+ We have developed tutorials and documentation to introduce the open-source
+ Nengo software (available at http://nengo.ca).
+ To aid instruction, we have included both a complete scripting system and
+ an integrated drag-and-drop GUI interface for Nengo 
+\begin_inset CommandInset citation
+LatexCommand cite
+key "Stewart2009l"
+
+\end_inset
+
+.
+ We hope that being able to integrate ideas from psychology, neuroscience,
+ and artificial intelligence and construct large-scale neural models that
+ connect sensory systems, cognitive system, and motor systems makes for
+ an exciting new approach to brain research.
+ We believe these sorts of models will be extremely beneficial for understanding
+ human cognition, treating brain disorders, and developing efficient parallel
+ computation.
+\end_layout
+
+\begin_layout Standard
+\begin_inset CommandInset bibtex
+LatexCommand bibtex
+bibfiles "/Users/celiasmi/Documents/library"
+options "plain"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Biography
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+{Terrence C.
+ Stewart}
+\end_layout
+
+\end_inset
+
+ 
+\begin_inset Argument
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename TerryStewart.png
+	scale 200
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+ recieved a B.A.Sc degree in systems design engineering at the University
+ of Waterloo in 1999, an M.Phil degree in computer science and artificial
+ intelligence at Sussex University in 2000 and a Ph.D.
+ degree in cognitive science from Carleton University in 2007.
+\end_layout
+
+\begin_layout Biography
+He is a post-doctoral research associate in the Department of Systems Design
+ Engineering with the Centre for Theoretical Neuroscience at the University
+ of Waterloo, in Waterloo, Canada.
+ His core interests are in understanding human cognition by building biologicall
+y realistic neural simulations, and he is currently focusing on language
+ processing and motor control.
+\end_layout
+
+\begin_layout Biography
+Dr.
+ Stewart is a Behavioral & Brain Sciences Associate, a member of the Cognitive
+ Science Society, and a founding member of the Biologically Inspired Cognitive
+ Architecture society.
+ He also co-chaired the 2013 International Conference on Cognitive Modelling,
+ held in Ottawa, Canada.
+\end_layout
+
+\begin_layout Standard
+\begin_inset VSpace smallskip
+\end_inset
+
+
+\end_layout
+
+\begin_layout Biography
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+{Chris Eliasmith}
+\end_layout
+
+\end_inset
+
+
+\series bold
+
+\begin_inset Argument
+status open
+
+\begin_layout Plain Layout
+
+\series bold
+\begin_inset Graphics
+	filename n1cjV7o.png
+	lyxscale 50
+	scale 23
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\series default
+ received a B.A.Sc.
+ degree in systems design engineering in 1994 and a M.A.
+ degree in philosophy in 1995 from the University of Waterloo.
+ He received a Ph.D.
+ degree in philosophy from Washington University in St.
+ Louis in 2000.
+\end_layout
+
+\begin_layout Biography
+From 2000-2001 he was a postdocoral researcher with Charlie Anderson in
+ David van Essen's lab at Washington University Medical School.
+ Since then he has been an assistant, associate, and full professor at the
+ University of Waterloo.
+ He is currently Director of the Centre for Theoretical Neuroscience at
+ the University of Waterloo and holds a Canada Research Chair in Theoretical
+ Neuroscience.
+ He has authored or coauthored two books and over 90 publications in philosophy,
+ psychology, neuroscience, computer science, and engineering venues.
+\end_layout
+
+\begin_layout Biography
+Professor Eliasmith holds a P.Eng designation, is associate editor for the
+ journal Cognitive Science, and a member of the Society for Neuroscience,
+ the Canadian Philosophical Association, and the Society for Cognitive Science.
+\end_layout
+
+\end_body
+\end_document
